@@ -14,7 +14,9 @@ import { LIBELLES_ROLE } from '../data/session.js';
 /* Utilisateurs — API réelle (SPEC §5.1 : CRUD + assignation Dept/Poste + reset + disable). */
 
 const selectCls = 'h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi';
-const ROLES = Object.keys(LIBELLES_ROLE).filter((r) => r !== 'client' && r !== 'super_admin');
+/* La page est réservée super_admin (RequireSuperAdmin) : Super Admin sélectionnable
+   (ex. DG), sans département. Les clients restent créés via la Fiche Client. */
+const ROLES = Object.keys(LIBELLES_ROLE).filter((r) => r !== 'client');
 
 export default function Utilisateurs() {
   const { notifier } = useOutletContext();
@@ -42,7 +44,7 @@ export default function Utilisateurs() {
         listerDepartements(),
         listerPostes(),
       ]);
-      setUsers(us.filter((u) => u.role !== 'super_admin'));
+      setUsers(us.results ?? us);
       setDepartements(dpts);
       setPostes(pst.results ?? pst);
       setNomsDepts(Object.fromEntries(dpts.map((d) => [d.id, d.nom])));
