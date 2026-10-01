@@ -296,6 +296,9 @@ export default function EspaceRedaction({ categorie }) {
             <ArrowLeft size={20} aria-hidden="true" /> Retour
           </Button>
           <Badge ton={statutTon(actif)}>{statutLabel(actif)}</Badge>
+          {categorie === 'contrats' && actif.signe_employe && (
+            <Badge ton="succes">Signé électroniquement par {actif.signature_employe_nom} le {dateFr(actif.signature_employe_le)}</Badge>
+          )}
           <span className="mr-auto" />
           {transitions.map((s) => (
             <Button key={s} variante="secondaire" onClick={() => avancerStatut(s)}>
@@ -337,7 +340,11 @@ export default function EspaceRedaction({ categorie }) {
           )}
           <div className="mt-esp-7 flex justify-end">
             <p className="border-t border-gris-400 px-esp-6 pt-esp-2 text-center font-courant text-[13px] text-gris-600">
-              Signature<br /><em>{entreprise.signataire}</em>
+              {categorie === 'contrats' && actif.signe_employe ? (
+                <>Signé électroniquement<br /><em>{actif.signature_employe_nom} · {dateFr(actif.signature_employe_le)}</em></>
+              ) : (
+                <>Signature<br /><em>{entreprise.signataire}</em></>
+              )}
             </p>
           </div>
           <PiedEntete entreprise={entreprise} />

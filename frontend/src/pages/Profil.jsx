@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { UserRound, ShieldCheck, BellRing, Eye, EyeOff, Check, Smartphone, Fingerprint, Trash2 } from 'lucide-react';
+import { UserRound, ShieldCheck, BellRing, Eye, EyeOff, Check, Smartphone, Fingerprint, Trash2, ScrollText, PenLine, X } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import Button from '../components/ui/Button.jsx';
 import { Card, CardHeader, CardBody } from '../components/ui/Card.jsx';
@@ -9,6 +9,7 @@ import { Label, Input } from '../components/ui/Input.jsx';
 import { LIBELLES_ROLE } from '../data/session.js';
 import { api, messageErreur } from '../api/client.js';
 import { abonnementActuel, activerPush, desactiverPush, pushSupporte, testerPush } from '../lib/push.js';
+import { listerMesContrats, signerContrat } from '../api/ressources.js';
 import { biometrieDisponible, biometrieSupportee, enregistrerBiometrie, listerBiometries, messageBiometrie, supprimerBiometrie } from '../lib/biometrie.js';
 import { changerMotDePasse } from '../api/auth.js';
 
@@ -38,6 +39,12 @@ export default function Profil() {
   const [bioDispo, setBioDispo] = useState(null);
   const [passkeys, setPasskeys] = useState([]);
   const [bioAction, setBioAction] = useState(false);
+  /* Mes contrats de travail : signature électronique salariée. */
+  const [contrats, setContrats] = useState([]);
+  const [signatureCible, setSignatureCible] = useState(null);
+  const [nomSign, setNomSign] = useState('');
+  const [luApprouve, setLuApprouve] = useState(false);
+  const [envoiSign, setEnvoiSign] = useState(false);
 
   useEffect(() => {
     let actif = true;
@@ -184,6 +191,41 @@ export default function Profil() {
       notifier({ type: 'info', titre: 'Appareil retiré', texte: 'Connexion par mot de passe conservée.' });
     } catch (e) {
       notifier({ type: 'info', titre: 'Retrait impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const chargerContrats = async () => {
+    try {
+      setContrats(await listerMesContrats());
+    } catch {
+      setContrats([]);
+    }
+  };
+
+  useEffect(() => {
+    chargerContrats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const signer = async (e) => {
+    e.preventDefault();
+    if (!signatureCible || envoiSign) return;
+    if (!luApprouve || nomSign.trim().length < 3) {
+      notifier({ type: 'info', titre: 'Signature incomplète', texte: 'Saisissez votre nom et cochez « Lu et approuvé ».' });
+      return;
+    }
+    setEnvoiSign(true);
+    try {
+      await signerContrat(signatureCible.id, { nom: nomSign.trim(), lu_approuve: true });
+      setSignatureCible(null);
+      setNomSign('');
+      setLuApprouve(false);
+      await chargerContrats();
+      notifier({ type: 'succes', titre: 'Contrat signé', texte: 'Votre signature électronique est archivée côté Juridique.' });
+    } catch (err) {
+      notifier({ type: 'info', titre: 'Signature impossible', texte: messageErreur(err) });
+    } finally {
+      setEnvoiSign(false);
     }
   };
 
@@ -355,6 +397,75 @@ export default function Profil() {
             )}
           </CardBody>
         </Card>
+
+        <Card survol={false} className="lg:col-span-2">
+          <CardHeader>
+            <span className="flex items-center gap-esp-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-digi-voile">
+                <ScrollText size={20} aria-hidden="true" className="text-digi" />
+              </span>
+              <h2 className="!text-[18px]">Mes contrats de travail</h2>
+            </span>
+          </CardHeader>
+          <CardBody className="flex flex-col gap-esp-3">
+            {contrats.length === 0 && (
+              <p className="font-courant text-[15px] text-gris-600">Aucun contrat de travail à votre nom pour le moment.</p>
+            )}
+            {contrats.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center gap-esp-3 rounded-lg bg-gris-100 p-esp-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-courant text-[15px] font-semibold text-gris-900">{c.titre}</p>
+                  <p className="font-courant text-[13px] text-gris-600">
+                    {c.signe_employe
+                      ? `Signé électroniquement par ${c.signature_employe_nom} le ${dateFr(c.signature_employe_le)}`
+                      : 'En attente de votre signature'}
+                  </p>
+                </div>
+                <Badge ton={c.signe_employe ? 'succes' : 'alerte'}>{c.signe_employe ? 'Signé' : 'À signer'}</Badge>
+                {!c.signe_employe && (
+                  <Button taille="sm" onClick={() => { setSignatureCible(c); setNomSign(''); setLuApprouve(false); }}>
+                    <PenLine size={16} aria-hidden="true" /> Signer
+                  </Button>
+                )}
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+
+        {signatureCible && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-esp-4" role="dialog" aria-modal="true" aria-label={`Signer ${signatureCible.titre}`}>
+            <div className="dg-fondu absolute inset-0 bg-marine-profond/60" onClick={() => setSignatureCible(null)} />
+            <form onSubmit={signer} className="dg-pop relative w-full max-w-[480px] rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
+              <div className="flex items-start justify-between gap-esp-3">
+                <div>
+                  <p className="dg-surtitre">Signature électronique</p>
+                  <h2 className="!text-[21px]">{signatureCible.titre}</h2>
+                </div>
+                <button type="button" onClick={() => setSignatureCible(null)} aria-label="Fermer" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200">
+                  <X size={20} aria-hidden="true" />
+                </button>
+              </div>
+              <p className="mt-esp-3 font-courant text-[15px] text-gris-600">
+                Votre nom et la date sont scellés au document avec une empreinte de contrôle.
+                Toute modification du contrat par le Juridique après signature l invalide.
+              </p>
+              <div className="mt-esp-4">
+                <Label htmlFor="sign-nom">Nom et prénom (signature)</Label>
+                <div className="mt-esp-2"><Input id="sign-nom" value={nomSign} onChange={(e) => setNomSign(e.target.value)} placeholder="Ex. Moussa Koné" autoComplete="name" /></div>
+              </div>
+              <button type="button" role="switch" aria-checked={luApprouve} onClick={() => setLuApprouve((v) => !v)} className="mt-esp-4 inline-flex min-h-[44px] cursor-pointer items-center gap-esp-2 text-left font-courant text-[15px] text-gris-700">
+                <span aria-hidden="true" className={`relative h-7 w-12 shrink-0 rounded-pilule transition-colors duration-rapide ${luApprouve ? 'bg-digi' : 'bg-gris-300'}`}>
+                  <span className={`absolute top-1 h-5 w-5 rounded-pilule bg-blanc shadow-ombre-1 transition-all duration-rapide ${luApprouve ? 'left-6' : 'left-1'}`} />
+                </span>
+                Lu et approuvé
+              </button>
+              <div className="mt-esp-5 flex justify-end gap-esp-3">
+                <Button variante="fantome" onClick={() => setSignatureCible(null)}>Annuler</Button>
+                <Button type="submit" disabled={envoiSign}><PenLine size={20} aria-hidden="true" /> {envoiSign ? 'Signature…' : 'Signer'}</Button>
+              </div>
+            </form>
+          </div>
+        )}
 
         <Card survol={false} className="lg:col-span-2">
           <CardHeader>

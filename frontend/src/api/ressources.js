@@ -38,6 +38,8 @@ export const listerContrats = (params) => toutLister('/juridique/contracts/', pa
 export const creerContrat = (payload) => post('/juridique/contracts/', payload);
 export const majContrat = (id, payload) => patch(`/juridique/contracts/${id}/`, payload);
 export const supprimerContrat = (id) => suppr(`/juridique/contracts/${id}/`);
+export const listerMesContrats = () => get('/juridique/contracts/mes/');
+export const signerContrat = (id, payload) => post(`/juridique/contracts/${id}/signer/`, payload);
 export const listerLitiges = (params) => toutLister('/juridique/disputes/', params);
 export const creerLitige = (payload) => post('/juridique/disputes/', payload);
 export const majLitige = (id, payload) => patch(`/juridique/disputes/${id}/`, payload);

@@ -186,6 +186,8 @@ Statuts: `en_attente -> valide | refuse` (+ `annule` par le demandeur tant que n
 
 ### 5.6 Juridique (`/juridique`)
 - [x] Contrats (client/employé): rédaction depuis modèle, version, signature, PDF
+- [x] PDF contrat conforme à l'aperçu (parseur HTML robuste : titres h1-h6, listes, citations, gras/italique, aucune balise brute ; ligne cible · date · statut), bloc signature électronique salariée si signée
+- [x] Signature électronique salariée (02/10/2026) : `signature_employe_nom/le/hash` (empreinte du contenu scellée), `POST /juridique/contracts/:id/signer/` réservé au salarié lié (nom + « Lu et approuvé »), `GET /juridique/contracts/mes/` + carte « Mes contrats » dans Profil, notif Chef Juridique + Super Admin, badge dans l'aperçu ; toute modification titre/contenu par le Juridique invalide la signature (à re-signer)
 - [ ] Alertes échéances/renouvellements (Celery Beat J-30/J-7 — Beat non actif)
 - [x] Litiges: statut, pièces jointes
 - [x] Bibliothèque clauses/modèles
