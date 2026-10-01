@@ -1,0 +1,28 @@
+# HUB DIGI — prod stack (pattern DIGI-AGENCY : 1 conteneur, nginx TLS sur l'hôte).
+# VPS : git clone repo vers /var/www/hub-digi, placer le vrai backend/.env
+# (voir deploy/.env.production.example), puis :
+#   docker compose pull && docker compose up -d
+# L'image est buildée/poussée par GitHub Actions (GHCR). En local : docker compose up --build.
+name: hub-digi
+services:
+  web:
+    image: ghcr.io/futuriste2030/hub-digi:latest
+    build:
+      context: .
+      args:
+        VITE_API_URL: https://hub.digicom.ml/api/v1
+        VITE_PAIEMENT_ACTIF: "false"
+    env_file:
+      - backend/.env
+    environment:
+      SQLITE_PATH: /data/db.sqlite3
+    volumes:
+      - sqlite_data:/data
+      - media_data:/app/media
+    ports:
+      - "127.0.0.1:8001:8000"
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
+  media_data:

@@ -1,0 +1,13 @@
+# HUB DIGI — push prod (SPEC §14 : .env jamais commité)
+backend/.env
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+backend/frontend_dist/
+backend/__pycache__/
+backend/*.pyc
+frontend/.env
+frontend/dist/
+frontend/node_modules/
+*.log
+.DS_Store

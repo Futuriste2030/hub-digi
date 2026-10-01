@@ -1,0 +1,306 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   TOKENS — CHARTE DIGI COM (source unique de vérité)
+   Interdit d'utiliser un littéral couleur/espacement/rayon/ombre
+   ailleurs que dans ce :root. Composants -> var(--…).
+   ============================================================ */
+:root {
+  --marine-profond: #0b182b;
+  --marine: #14233a;
+  --marine-clair: #23334c;
+  --marine-footer: #0a1526;
+  --bleu-digi: #2f7cbe;
+  --bleu-signal: #4fa3dc;
+  --blanc-pur: #ffffff;
+  --argent: #e7e7e8;
+  --ardoise: #32425b;
+  --bleu-profond: #1e5a8e;
+  --bleu-texte: #276ba6;
+  --bleu-brume: #a9cfeb;
+  --bleu-voile: rgba(47, 124, 190, 0.12);
+
+  --gris-900: #0b182b;
+  --gris-800: #14233a;
+  --gris-700: #23334c;
+  --gris-600: #32425b;
+  --gris-500: #6e7c8f;
+  --gris-400: #a7b2c0;
+  --gris-300: #d6dce3;
+  --gris-200: #e7e7e8;
+  --gris-100: #f4f6f8;
+  --gris-000: #ffffff;
+
+  --succes: #12855a;
+  --succes-lumineux: #4fc08d;
+  --succes-fond: #e6f4ed;
+  --alerte: #946113;
+  --alerte-lumineux: #f0b458;
+  --alerte-fond: #fbf1df;
+  --erreur: #b03a2e;
+  --erreur-lumineux: #f08a7d;
+  --erreur-fond: #fae9e7;
+  --info: #276ba6;
+  --info-lumineux: #6fb4e4;
+  --info-fond: #e7f1f9;
+
+  --degrade-metal: linear-gradient(180deg, #ffffff 0%, #ffffff 42%, #c9cdd3 68%, #e7e7e8 100%);
+  --degrade-marine: radial-gradient(120% 90% at 50% 0%, #32425b 0%, #14233a 42%, #0b182b 100%);
+  --degrade-bleu: linear-gradient(135deg, #4fa3dc 0%, #2f7cbe 55%, #1e5a8e 100%);
+
+  --esp-1: 4px;
+  --esp-2: 8px;
+  --esp-3: 12px;
+  --esp-4: 16px;
+  --esp-5: 24px;
+  --esp-6: 32px;
+  --esp-7: 48px;
+  --esp-8: 64px;
+  --esp-9: 96px;
+  --esp-10: 128px;
+
+  --grille-largeur-max: 1240px;
+  --grille-gouttiere: 24px;
+
+  --rayon-sm: 2px;
+  --rayon-md: 4px;
+  --rayon-lg: 8px;
+  --rayon-xl: 14px;
+  --rayon-pilule: 999px;
+
+  --ombre-1: 0 1px 2px rgba(11, 24, 43, 0.28);
+  --ombre-2: 0 4px 12px rgba(11, 24, 43, 0.18);
+  --ombre-3: 0 12px 32px rgba(11, 24, 43, 0.26);
+  --ombre-4: 0 24px 60px rgba(11, 24, 43, 0.34);
+  --ombre-bleue: 0 8px 24px rgba(47, 124, 190, 0.34);
+  --anneau-focus: 0 0 0 3px rgba(79, 163, 220, 0.55);
+
+  --duree-rapide: 120ms;
+  --duree-standard: 180ms;
+  --duree-lente: 280ms;
+  --ease-standard: cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  /* Échelle hiérarchique 0 → 6 (mission postes/niveaux) — texte blanc dessus,
+     sauf niveau 2 (bleu clair → texte marine profond). Contraste AA. */
+  --niveau-0: #5d6d82;
+  --niveau-1: #32425b;
+  --niveau-2: #6fb4e4;
+  --niveau-3: #2f7cbe;
+  --niveau-4: #14233a;
+  --niveau-5: #b26a00;
+  --niveau-6: #b03a2e;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    font-family: Barlow, 'Source Sans 3', 'IBM Plex Sans', sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
+    color: var(--gris-700);
+    background: var(--gris-100);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: Montserrat, Poppins, Archivo, sans-serif;
+    color: var(--marine-profond);
+  }
+  /* Échelle resserrée pour densité logicielle (charte assouplie sur demande) */
+  h1 { font-size: 36px; font-weight: 800; line-height: 1.1; letter-spacing: -0.015em; }
+  h2 { font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; }
+  h3 { font-size: 34px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
+  h4 { font-size: 26px; font-weight: 700; line-height: 1.25; }
+  h5 { font-size: 21px; font-weight: 700; line-height: 1.3; letter-spacing: 0.005em; }
+  h6 {
+    font-size: 18px; font-weight: 700; line-height: 1.35;
+    letter-spacing: 0.02em; text-transform: uppercase;
+  }
+  @media (max-width: 768px) {
+    h1 { font-size: 30px; }
+    h2 { font-size: 24px; }
+    h3 { font-size: 22px; }
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--anneau-focus);
+    border-radius: var(--rayon-md);
+  }
+  ::selection {
+    background: var(--bleu-voile);
+  }
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  /* Scrollbars fines globales : discrètes, teintées gris-300/400.
+     La sidebar garde sa variante marine (.dg-scroll-fin). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gris-400) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: var(--gris-300);
+    border-radius: var(--rayon-pilule);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: var(--gris-400); background-clip: content-box; }
+}
+
+@layer components {
+  .dg-surtitre {
+    font-family: Montserrat, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--bleu-texte);
+  }
+  .dg-surtitre-sur-marine { color: var(--bleu-signal); }
+  .dg-chapo { font-size: 19px; line-height: 1.6; }
+  .dg-legende {
+    font-size: 13px; line-height: 1.45; letter-spacing: 0.04em;
+    color: var(--gris-600);
+  }
+  .dg-fond-marine { background: var(--degrade-marine); }
+  .dg-fond-bleu { background: var(--degrade-bleu); }
+  .dg-motif-pixels {
+    background-image: radial-gradient(rgba(79, 163, 220, 0.16) 1px, transparent 1px);
+    background-size: 16px 16px;
+    mask-image: radial-gradient(80% 80% at 50% 20%, black 30%, transparent 100%);
+  }
+  .dg-chanfrein { clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
+  .dg-carte-mise-en-avant { position: relative; }
+  .dg-carte-mise-en-avant::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--degrade-bleu);
+    border-radius: var(--rayon-lg) var(--rayon-lg) 0 0;
+  }
+  /* Scroll horizontal stylé (ex. onglets espace client sur mobile) :
+     fine, teintée marine sur fond clair, pastilles accrochées au scroll. */
+  .dg-scroll-x {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bleu-digi) transparent;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .dg-scroll-x > * { scroll-snap-align: start; }
+  .dg-scroll-x::-webkit-scrollbar { height: 6px; }
+  .dg-scroll-x::-webkit-scrollbar-track { background: transparent; }
+  .dg-scroll-x::-webkit-scrollbar-thumb {
+    background: var(--bleu-digi);
+    border-radius: var(--rayon-pilule);
+  }
+  .dg-scroll-fin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--marine-clair) transparent;
+  }
+  .dg-scroll-fin::-webkit-scrollbar { width: 8px; }
+  .dg-scroll-fin::-webkit-scrollbar-track { background: transparent; }
+  .dg-scroll-fin::-webkit-scrollbar-thumb {
+    background: var(--marine-clair);
+    border-radius: var(--rayon-pilule);
+    border: 2px solid var(--marine-profond);
+  }
+  /* Entrée de page subtile : fondu + montée 4px, 180ms, sans rebond */
+  .dg-entree { animation: dg-entree var(--duree-standard) var(--ease-standard); }
+  @keyframes dg-entree {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dg-entree { animation: none; }
+  }
+  /* Chiffres tabulaires pour montants et refs */
+  .dg-tnum { font-variant-numeric: tabular-nums; }
+  /* Micro-animations dashboard (toutes ≤ 500ms, sans rebond) */
+  .dg-fondu { animation: dg-fondu 280ms ease both; }
+  .dg-fondu-tard { opacity: 0; animation: dg-fondu 280ms ease 200ms forwards; }
+  .dg-pop { animation: dg-pop 180ms var(--ease-standard) both; }
+  .dg-montee { animation: dg-montee 280ms var(--ease-standard) both; }
+  .dg-trait { stroke-dasharray: 1; stroke-dashoffset: 1; animation: dg-trait 500ms ease forwards; }
+  @keyframes dg-fondu { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes dg-pop {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes dg-montee {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes dg-trait { to { stroke-dashoffset: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .dg-fondu, .dg-fondu-tard, .dg-pop, .dg-montee, .dg-trait { animation: none; opacity: 1; }
+  }
+}
+
+/* Icônes Lucide : trait 2px, square/miter — forcé globalement */
+.lucide {
+  stroke-width: 2px;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  fill: none;
+}
+
+/* Rendu des documents rédactionnels (éditeur + aperçu + print) */
+.dg-doc h1 {
+  font-family: Montserrat, sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--marine-profond);
+  margin: 24px 0 12px;
+}
+.dg-doc h2 {
+  font-family: Montserrat, sans-serif;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--marine-profond);
+  margin: 24px 0 12px;
+}
+.dg-doc h3 {
+  font-family: Montserrat, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ardoise);
+  margin: 20px 0 10px;
+}
+.dg-doc h1:first-child, .dg-doc h2:first-child, .dg-doc h3:first-child { margin-top: 0; }
+.dg-doc p { margin: 0 0 12px; }
+.dg-doc ul, .dg-doc ol { margin: 0 0 12px 24px; }
+.dg-doc li { margin-bottom: 4px; }
+.dg-doc blockquote {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border-left: 4px solid var(--bleu-digi);
+  background: var(--info-fond);
+  color: var(--gris-700);
+  font-style: italic;
+}
+.dg-doc a { color: var(--bleu-texte); text-decoration: underline; }
+.dg-doc hr { border: 0; border-top: 2px solid var(--gris-300); margin: 20px 0; }
+
+/* Impression documents (facture, reçu) : seul .dg-print-doc sort, le reste est masqué */
+@media print {
+  body * { visibility: hidden; }
+  .dg-print-doc, .dg-print-doc * { visibility: visible; }
+  .dg-print-doc {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    border: none;
+    box-shadow: none;
+  }
+  .dg-no-print { display: none !important; }
+}

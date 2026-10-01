@@ -1,0 +1,32 @@
+# Secrets & état local — JAMAIS dans l'image (pattern DIGI-AGENCY)
+.env
+.env.*
+!deploy/.env.production.example
+backend/.env
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+backend/frontend_dist/
+frontend/.env
+frontend/dist/
+frontend/node_modules/
+db.sqlite3
+media/
+staticfiles/
+
+# VCS & OS
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+env/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/

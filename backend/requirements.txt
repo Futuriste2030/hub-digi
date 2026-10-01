@@ -1,0 +1,17 @@
+Django==5.2.16
+djangorestframework==3.18.0
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+django-filter==25.2
+drf-spectacular==0.30.0
+django-otp==1.7.3
+celery==5.6.3
+django-celery-beat
+python-dotenv==1.2.3
+reportlab==4.5.1
+qrcode==8.2
+Pillow==11.3.0
+whitenoise==6.7.0  # prod : sert /static/ + build Vite depuis le conteneur (pattern DIGI-AGENCY)
+gunicorn==23.0.0  # prod hub.digicom.ml : gunicorn derrière nginx (SPEC §15)
+# Optionnels (non requis) :
+# redis==8.1.0            # client Redis, seulement si CELERY_EAGER=0 + serveur Redis
