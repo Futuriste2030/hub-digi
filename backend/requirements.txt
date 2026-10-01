@@ -11,6 +11,8 @@ python-dotenv==1.2.3
 reportlab==4.5.1
 qrcode==8.2
 Pillow==11.3.0
+pywebpush==2.5.0  # notifications push web (relais notifs in-app)
+webauthn==3.0.1  # biométrie/passkeys (option Profil + login)
 whitenoise==6.7.0  # prod : sert /static/ + build Vite depuis le conteneur (pattern DIGI-AGENCY)
 gunicorn==23.0.0  # prod hub.digicom.ml : gunicorn derrière nginx (SPEC §15)
 # Optionnels (non requis) :

@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     "apps.mailing",
     "apps.bugtracker",
     "apps.portal_client",
+    "apps.push",  # notifications push web (relais des notifs in-app, SPEC §10)
+    "apps.webauthn",  # biométrie/passkeys (option Profil + login, mdp conservé)
 ]
 
 MIDDLEWARE = [

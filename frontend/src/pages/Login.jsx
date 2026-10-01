@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, X, CircleCheck, Lock } from 'lucide-react';
+import { Eye, EyeOff, X, CircleCheck, Lock, Fingerprint } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import { Label, Input, Textarea } from '../components/ui/Input.jsx';
 import Logo from '../components/Logo.jsx';
@@ -8,6 +8,7 @@ import { useAuth, userVersSession } from '../store/auth.js';
 import { listerClients } from '../api/clients.js';
 import { urlEspace, urlTableauDeBord } from '../lib/acces.js';
 import { demanderReset } from '../api/auth.js';
+import { biometrieSupportee, connecterBiometrie } from '../lib/biometrie.js';
 import { messageErreur } from '../api/client.js';
 
 /* Connexion réelle : JWT Django. Si la 2FA est active, second écran pour le code. */
@@ -16,7 +17,7 @@ const MODES = {
   reset: {
     surtitre: 'Accès au hub',
     titre: 'Mot de passe oublié',
-    texte: 'Indiquez votre adresse pro. Nous envoyons un lien de réinitialisation valable 1 heure.',
+    texte: 'Indiquez votre adresse pro. Nous envoyons un lien de réinitialisation valable 24 heures.',
     submit: 'Envoyer le lien',
     succesTitre: 'Lien envoyé',
     succesTexte: 'Vérifiez votre boîte mail, puis suivez le lien pour définir un nouveau mot de passe.',
@@ -175,6 +176,8 @@ export default function Login() {
   const [visible, setVisible] = useState(false);
   const [souvenir, setSouvenir] = useState(true);
   const [modale, setModale] = useState(null);
+  const [erreurBio, setErreurBio] = useState('');
+  const [bioEnCours, setBioEnCours] = useState(false);
 
   const allerAccueil = async (sess) => {
     if (sess?.role === 'client') {
@@ -202,6 +205,31 @@ export default function Login() {
     e.preventDefault();
     const { erreur } = await verifierOtp(code.trim());
     if (!erreur) allerAccueil(userVersSession(useAuth.getState().user));
+  };
+
+  /* Biométrie : passkey de l'appareil, le mot de passe reste toujours proposé.
+     Si la 2FA TOTP est active, on bascule sur l'écran code existant. */
+  const connecterBio = async () => {
+    if (!email.trim()) {
+      setErreurBio('Indiquez d abord votre identifiant ou e-mail pro.');
+      return;
+    }
+    if (bioEnCours) return;
+    setBioEnCours(true);
+    setErreurBio('');
+    try {
+      const { data, status } = await connecterBiometrie(email.trim());
+      if (status === 202 && data.otp_required) {
+        useAuth.getState().definirOtpTemp(data.temp_token);
+        return;
+      }
+      await useAuth.getState().appliquerTokens(data.access, data.refresh);
+      allerAccueil(userVersSession(useAuth.getState().user));
+    } catch (e) {
+      setErreurBio(e instanceof Error && !e.response ? e.message : messageErreur(e, 'Biométrie impossible, utilisez le mot de passe.'));
+    } finally {
+      setBioEnCours(false);
+    }
   };
 
   if (access && !otpTemp) {
@@ -307,6 +335,19 @@ export default function Login() {
               {chargement ? 'Connexion…' : 'Se connecter'}
             </Button>
             {erreurAuth && <p role="alert" className="font-courant text-[15px] text-erreur">{erreurAuth}</p>}
+            {biometrieSupportee() && (
+              <>
+                <div className="flex items-center gap-esp-3" aria-hidden="true">
+                  <span className="h-px flex-1 bg-gris-200" />
+                  <span className="font-courant text-[13px] text-gris-500">ou</span>
+                  <span className="h-px flex-1 bg-gris-200" />
+                </div>
+                <Button type="button" variante="secondaire" taille="lg" className="w-full" onClick={connecterBio} disabled={bioEnCours}>
+                  <Fingerprint size={20} aria-hidden="true" /> {bioEnCours ? 'Vérification…' : 'Se connecter avec biométrie'}
+                </Button>
+                {erreurBio && <p role="alert" className="font-courant text-[15px] text-erreur">{erreurBio}</p>}
+              </>
+            )}
           </form>
           )}
 

@@ -36,6 +36,10 @@ export const useAuth = create(
 
       estConnecte: () => !!get().access,
 
+      definirOtpTemp(temp) {
+        set({ otpTemp: temp, chargement: false, erreur: '' });
+      },
+
       async login(email, motDePasse) {
         set({ chargement: true, erreur: '', otpTemp: null });
         try {

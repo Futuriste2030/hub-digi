@@ -1,7 +1,8 @@
 # HUB DIGI - Digi Com & Technologies
 ## Cahier des spécifications - Référence développement
 
-**Version:** 1.1 - 30/09/2026 (veille de mise en ligne sur `hub.digicom.ml`)
+**Version:** 1.2 - 02/10/2026 (push web + biométrie, déploiement Docker hub.digicom.ml :8002)
+**v1.1 - 30/09/2026** (veille de mise en ligne sur `hub.digicom.ml`)
 **v1.0 - 10/09/2026 :** socle initial.
 **MAJ 15/09/2026 :** portail client `/espace/:slug/:code` ; 2FA TOTP + QR Profil ; chat temps différé + pastille tickets + cloche `/notifications/` ; reset accès client depuis la fiche (manuel).
 **MAJ 30/09/2026 :** module Fournisseurs/Achats (fiches + BDC/BDL/factures ACHAT/paiements + reçus PDF, sélecteur Non payée/Acompte/Payée — c'est Digi Com qui paie, pas de lien de paiement) ; références serveur séquentielles (`references.py` + `CompteurReference` : `BDC/BDL/ACHAT/RECU-F-SLUG-AAAA-NNNN`) ; Décharges Secrétariat (scan compressé serveur JPEG 1600px q70) ; courriers : mention « sortant » retirée du document, cachet Secrétariat dédié (`cachet_secretariat`, signature manuscrite après impression) ; tous les modèles visibles dans `/admin/` (traces en lecture seule) ; notifs bugs (cloche Chef Dév + Super Admin, + admin et mail `dev@` si critique, `gravite` transmissible) ; footer = statut API réel (ping `/settings/entreprise/`) ; domaine unique `hub.digicom.ml` (front + API + tracker) ; `.env` backend prod (SMTP système, tokens) ; SMTP par identité : champs réglables dans `/admin/` mais envoi via compte unique `.env` (connexion dynamique SPEC §8 non implémentée, `smtp_password` en clair — fernet non implémenté).
@@ -296,6 +297,8 @@ Sécurité/V1 scope:
 - [x] Auth JWT + refresh rotation + 2FA optionnelle + reset password (lien 24 h)
 - [ ] AuditLog auto sur create/update/delete sensibles (modèle + admin lecture seule présents, écriture non branchée)
 - [x] Notifications in-app (cloche `/notifications/`, tickets + bugs + congés) ; mails : factures/reçus/tickets/réunions/congés via templates ; rappels auto J-3/J+7 et SLA en attente (Beat non actif)
+- [x] Push web (02/10/2026, app `push`, logique existante inchangée) : signal `post_save` sur `Notification` → tâche `envoyer_push_async` (VAPID auto-généré en base `VapidConfig`, abonnements `PushSubscription`, 404/410 purgés) ; endpoints `/push/vapid-key/`, `/push/subscribe/`, `/push/test/` ; service worker `push-sw.js` + activation dans Profil (iPhone : ajout écran d'accueil requis)
+- [x] Biométrie/passkeys (02/10/2026, app `webauthn`, `webauthn==3.0.1`, additif au mdp) : `PasskeyCredential` (clé publique seule) + `PasskeyChallenge` à usage unique 10 min (multi-workers) ; `POST /auth/webauthn/register/*` (connecté, `PLATFORM` + vérification préférée), `POST /auth/webauthn/login/*` (public, JWT directs ou 202 OTP si TOTP) ; UI Profil (activer/retirer) + bouton Login « Se connecter avec biométrie », fallback mdp toujours présent
 - [x] Upload fichiers avec validation extension/taille (images 10 Mo, cachets 2 Mo) + compression serveur des scans de décharges
 - [ ] Recherche globale cross-entités (recherche par page + filtres `?search` partout)
 - [x] Génération PDF unifiée ReportLab (header Digi Com & Technologies, footer, numérotation, cachets) ; courriers via impression navigateur
@@ -345,7 +348,7 @@ AuditLog, Notification
 ## 12. Endpoints API DRF v1 (à implémenter)
 
 ```
-GET/POST /api/v1/auth/login/ refresh/ me/ + otp/ (setup/confirm/verify/disable/status) + password/ (reset, reset/confirm, change)
+GET/POST /api/v1/auth/login/ refresh/ me/ + otp/ (setup/confirm/verify/disable/status) + webauthn/ (register/begin|complete, login/begin|complete, credentials/) + password/ (reset, reset/confirm, change)
 /api/v1/users/ (+ /mini/, /:id/reset-password/, /:id/send-access/) departments/ postes/
 /api/v1/clients/ :id/overview/
 /api/v1/projects/ :id/tasks/ :id/bugs/ :id/milestones/ + /tasks/ /milestones/ /tracker-keys/ /bugs/ + :id/convertir/
@@ -358,7 +361,7 @@ GET/POST /api/v1/auth/login/ refresh/ me/ + otp/ (setup/confirm/verify/disable/s
 /api/v1/secretariat/courriers/ reunions/ (:id/decider/, decisions/:id/convertir/) decharges/
 /api/v1/mailing/send/ sent/ templates/ + /settings/entreprise/ (GET/PATCH super_admin)
 /api/v1/bugs/report/ (public, throttled) + /bugs/ /tracker-keys/
-/api/v1/notifications/ + /chat/conversations/ /chat/messages/?avec= /chat/send/ /chat/lus/
+/api/v1/notifications/ + push/ (vapid-key/, subscribe/, test/) + /chat/conversations/ /chat/messages/?avec= /chat/send/ /chat/lus/
 /api/v1/dashboard/super-admin/ /dashboard/perso/ /dashboard/series/ + /portal/dashboard/ (client)
 /api/docs/ (OpenAPI) + /static/tracker.js + /admin/ (tous modèles, traces lecture seule)
 ```

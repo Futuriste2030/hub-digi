@@ -1,0 +1,7 @@
+from django.apps import AppConfig
+
+
+class WebauthnConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.webauthn"
+    verbose_name = "Biométrie / Passkeys"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { UserRound, ShieldCheck, BellRing, Eye, EyeOff, Check, Smartphone } from 'lucide-react';
+import { UserRound, ShieldCheck, BellRing, Eye, EyeOff, Check, Smartphone, Fingerprint, Trash2 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import Button from '../components/ui/Button.jsx';
 import { Card, CardHeader, CardBody } from '../components/ui/Card.jsx';
@@ -8,9 +8,16 @@ import Badge from '../components/ui/Badge.jsx';
 import { Label, Input } from '../components/ui/Input.jsx';
 import { LIBELLES_ROLE } from '../data/session.js';
 import { api, messageErreur } from '../api/client.js';
+import { abonnementActuel, activerPush, desactiverPush, pushSupporte, testerPush } from '../lib/push.js';
+import { biometrieDisponible, biometrieSupportee, enregistrerBiometrie, listerBiometries, supprimerBiometrie } from '../lib/biometrie.js';
 import { changerMotDePasse } from '../api/auth.js';
 
 /* Mon profil — infos session, sécurité réelle (POST /auth/password/change/), 2FA, préférences. */
+
+const dateFr = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR');
+};
 
 export default function Profil() {
   const { notifier, session } = useOutletContext();
@@ -24,6 +31,13 @@ export default function Profil() {
   const [qr, setQr] = useState(null); // { otpauth_url, secret }
   const [code2fa, setCode2fa] = useState('');
   const [erreur2fa, setErreur2fa] = useState('');
+  /* Push web : relais navigateur des notifs in-app (bugs, tickets, mails…). */
+  const [pushActif, setPushActif] = useState(false);
+  const [pushAction, setPushAction] = useState(false);
+  /* Biométrie : passkeys de l'appareil, mot de passe toujours conservé. */
+  const [bioDispo, setBioDispo] = useState(null);
+  const [passkeys, setPasskeys] = useState([]);
+  const [bioAction, setBioAction] = useState(false);
 
   useEffect(() => {
     let actif = true;
@@ -98,6 +112,78 @@ export default function Profil() {
       setErreur(messageErreur(err, 'Modification impossible. Vérifiez le mot de passe actuel.'));
     } finally {
       setEnvoiMdp(false);
+    }
+  };
+
+  useEffect(() => {
+    let actif = true;
+    abonnementActuel().then(
+      (abo) => { if (actif) setPushActif(!!abo); },
+      () => {},
+    );
+    return () => { actif = false; };
+  }, []);
+
+  const basculerPush = async () => {
+    if (pushAction) return;
+    setPushAction(true);
+    try {
+      if (pushActif) {
+        await desactiverPush();
+        setPushActif(false);
+        notifier({ type: 'info', titre: 'Push désactivées', texte: 'La cloche in-app continue de fonctionner.' });
+      } else {
+        await activerPush();
+        setPushActif(true);
+        notifier({ type: 'succes', titre: 'Push activées', texte: 'Bugs, tickets et mails arriveront même hub fermé.' });
+      }
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Push impossibles', texte: e.message ?? messageErreur(e) });
+    } finally {
+      setPushAction(false);
+    }
+  };
+
+  const envoyerTestPush = async () => {
+    try {
+      await testerPush();
+      notifier({ type: 'succes', titre: 'Test envoyé', texte: 'Regardez vos notifications système.' });
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Test impossible', texte: messageErreur(e) });
+    }
+  };
+
+  useEffect(() => {
+    let actif = true;
+    biometrieDisponible().then((ok) => { if (actif) setBioDispo(!!ok); });
+    listerBiometries().then(
+      (liste) => { if (actif) setPasskeys(liste); },
+      () => {},
+    );
+    return () => { actif = false; };
+  }, []);
+
+  const activerBiometrie = async () => {
+    if (bioAction) return;
+    setBioAction(true);
+    try {
+      await enregistrerBiometrie('Mon appareil');
+      setPasskeys(await listerBiometries());
+      notifier({ type: 'succes', titre: 'Biométrie activée', texte: 'Prochaine connexion possible par empreinte ou visage.' });
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Activation impossible', texte: e.message ?? messageErreur(e) });
+    } finally {
+      setBioAction(false);
+    }
+  };
+
+  const retirerBiometrie = async (id) => {
+    try {
+      await supprimerBiometrie(id);
+      setPasskeys((prev) => prev.filter((p) => p.id !== id));
+      notifier({ type: 'info', titre: 'Appareil retiré', texte: 'Connexion par mot de passe conservée.' });
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Retrait impossible', texte: messageErreur(e) });
     }
   };
 
@@ -225,6 +311,75 @@ export default function Profil() {
             )}
             {doubleAuth === true && (
               <div><Button variante="fantome" onClick={desactiver2fa}>Désactiver la 2FA</Button></div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card survol={false} className="lg:col-span-2">
+          <CardHeader>
+            <span className="flex items-center gap-esp-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-digi-voile">
+                <Fingerprint size={20} aria-hidden="true" className="text-digi" />
+              </span>
+              <h2 className="!text-[18px]">Biométrie de cet appareil</h2>
+              <Badge ton={passkeys.length > 0 ? 'succes' : 'neutre'}>{passkeys.length > 0 ? 'Activée' : 'Désactivée'}</Badge>
+            </span>
+          </CardHeader>
+          <CardBody className="flex flex-col gap-esp-3">
+            <p className="font-courant text-[15px] text-gris-600">
+              Empreinte ou visage selon votre appareil, pour se connecter sans mot de passe.
+              La biométrie ne quitte jamais l appareil — le mot de passe reste toujours disponible.
+            </p>
+            {!biometrieSupportee() || bioDispo === false ? (
+              <p className="font-courant text-[15px] text-gris-600">Appareil incompatible — connexion par mot de passe conservée.</p>
+            ) : (
+              <>
+                {passkeys.map((p) => (
+                  <div key={p.id} className="flex items-center gap-esp-3 rounded-lg bg-gris-100 p-esp-3">
+                    <Fingerprint size={20} aria-hidden="true" className="shrink-0 text-digi" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-courant text-[15px] font-semibold text-gris-900">{p.nom}</span>
+                      <span className="block font-courant text-[13px] text-gris-600">Ajouté le {dateFr(p.cree_le)}{p.dernier_usage ? ` · utilisé le ${dateFr(p.dernier_usage)}` : ''}</span>
+                    </span>
+                    <button type="button" onClick={() => retirerBiometrie(p.id)} aria-label={`Retirer ${p.nom}`} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-erreur hover:bg-erreur-fond">
+                      <Trash2 size={18} aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+                <div>
+                  <Button variante="secondaire" onClick={activerBiometrie} disabled={bioAction || bioDispo === null}>
+                    {bioAction ? 'Activation…' : passkeys.length > 0 ? 'Ajouter cet appareil' : 'Activer la biométrie'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card survol={false} className="lg:col-span-2">
+          <CardHeader>
+            <span className="flex items-center gap-esp-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-digi-voile">
+                <BellRing size={20} aria-hidden="true" className="text-digi" />
+              </span>
+              <h2 className="!text-[18px]">Notifications push</h2>
+              <Badge ton={pushActif ? 'succes' : 'neutre'}>{pushActif ? 'Activées' : 'Désactivées'}</Badge>
+            </span>
+          </CardHeader>
+          <CardBody className="flex flex-col gap-esp-3">
+            <p className="font-courant text-[15px] text-gris-600">
+              Relaye bugs, tickets et mails jusque sur votre écran, même hub fermé.
+              La cloche in-app reste active dans tous les cas.
+            </p>
+            {!pushSupporte() ? (
+              <p className="font-courant text-[15px] text-gris-600">Navigateur incompatible — sur iPhone, ajoutez le hub à l écran d accueil puis réessayez.</p>
+            ) : (
+              <div className="flex flex-wrap gap-esp-3">
+                <Button variante={pushActif ? 'fantome' : 'secondaire'} onClick={basculerPush} disabled={pushAction}>
+                  {pushActif ? 'Désactiver le push' : 'Activer le push'}
+                </Button>
+                {pushActif && <Button variante="fantome" onClick={envoyerTestPush}>Envoyer un test</Button>}
+              </div>
             )}
           </CardBody>
         </Card>
