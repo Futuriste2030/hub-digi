@@ -24,6 +24,7 @@ from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria,
     AuthenticatorAttachment,
     PublicKeyCredentialDescriptor,
+    ResidentKeyRequirement,
     UserVerificationRequirement,
 )
 
@@ -82,6 +83,7 @@ class PasskeyRegisterBeginView(APIView):
             authenticator_selection=AuthenticatorSelectionCriteria(
                 authenticator_attachment=AuthenticatorAttachment.PLATFORM,
                 user_verification=UserVerificationRequirement.PREFERRED,
+                resident_key=ResidentKeyRequirement.PREFERRED,
             ),
         )
         PasskeyChallenge.objects.create(
@@ -141,16 +143,19 @@ def _extraire_challenge(donnees):
 
 
 class PasskeyLoginBeginView(APIView):
+    """Identifiant optionnel : renseigné → passkeys du compte ; vide →
+    découverte côté appareil (clé résidente), compte retrouvé au complete."""
+
     authentication_classes = []
     permission_classes = []
 
     def post(self, request):
         identifiant = (request.data.get("identifiant") or "").strip()
-        user = _trouver_user(identifiant)
-        if user is None or not user.is_active:
+        user = _trouver_user(identifiant) if identifiant else None
+        if identifiant and (user is None or not user.is_active):
             return Response({"detail": "E-mail ou identifiant incorrect."}, status=400)
-        creds = list(user.passkeys.all())
-        if not creds:
+        creds = list(user.passkeys.all()) if user else []
+        if user and not creds:
             return Response({"detail": "Aucune biométrie enregistrée pour ce compte, utilisez le mot de passe."}, status=400)
         options = generate_authentication_options(
             rp_id=_rp_id(),
@@ -158,7 +163,7 @@ class PasskeyLoginBeginView(APIView):
             user_verification=UserVerificationRequirement.PREFERRED,
         )
         PasskeyChallenge.objects.create(
-            user=user, email=user.email,
+            user=user, email=user.email if user else "",
             challenge=bytes_to_base64url(options.challenge),
             usage=PasskeyChallenge.AUTHENTICATION,
         )
@@ -173,15 +178,18 @@ class PasskeyLoginCompleteView(APIView):
         from apps.accounts.views import OtpRequis
 
         identifiant = (request.data.get("identifiant") or "").strip()
-        user = _trouver_user(identifiant)
         donnees = request.data.get("credential") or {}
-        if user is None:
+        user = _trouver_user(identifiant) if identifiant else None
+        if identifiant and user is None:
             return Response({"detail": "E-mail ou identifiant incorrect."}, status=400)
         cred_id = (donnees.get("id") or "").replace("=", "")
         try:
-            cred = user.passkeys.get(credential_id=cred_id)
+            cred = user.passkeys.get(credential_id=cred_id) if user else PasskeyCredential.objects.get(credential_id=cred_id)
         except PasskeyCredential.DoesNotExist:
             return Response({"detail": "Appareil non reconnu."}, status=400)
+        user = cred.user
+        if not user.is_active:
+            return Response({"detail": "Compte désactivé."}, status=400)
         defi = PasskeyChallenge.consommer(
             _extraire_challenge(donnees), PasskeyChallenge.AUTHENTICATION)
         if defi is None:

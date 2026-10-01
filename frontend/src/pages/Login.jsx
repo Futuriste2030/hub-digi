@@ -207,13 +207,10 @@ export default function Login() {
     if (!erreur) allerAccueil(userVersSession(useAuth.getState().user));
   };
 
-  /* Biométrie : passkey de l'appareil, le mot de passe reste toujours proposé.
+  /* Biométrie : e-mail optionnel — renseigné, le serveur propose les passkeys
+     du compte ; vide, l'appareil propose ses clés et le serveur retrouve le compte.
      Si la 2FA TOTP est active, on bascule sur l'écran code existant. */
   const connecterBio = async () => {
-    if (!email.trim()) {
-      setErreurBio('Indiquez d abord votre identifiant ou e-mail pro.');
-      return;
-    }
     if (bioEnCours) return;
     setBioEnCours(true);
     setErreurBio('');
