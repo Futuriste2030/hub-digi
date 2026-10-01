@@ -47,7 +47,7 @@ def _spa_index(request, chemin=""):
 # Route explicite (pas django.conf.urls.static : vide si DEBUG=False).
 from django.views.static import serve as _media_serve
 
-urlpatterns += [path("media/<path:chemin>", _media_serve, {"document_root": settings.MEDIA_ROOT})]
+urlpatterns += [path("media/<path:path>", _media_serve, {"document_root": settings.MEDIA_ROOT})]
 
 # SPA fallback en dernier : ne capte ni /api/* ni /admin/* ni /static/* ni /media/*.
 urlpatterns += [re_path(r"^(?!api/|admin/|static/|media/).*$", _spa_index)]
