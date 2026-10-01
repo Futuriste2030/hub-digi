@@ -28,6 +28,9 @@ export async function abonnementActuel() {
 
 export async function activerPush() {
   if (!pushSupporte()) throw new Error('Navigateur incompatible avec les notifications push.');
+  if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+    throw new Error('Notifications bloquées dans le navigateur : autorisez-les dans les réglages du site puis réessayez. Sur iPhone, ajoutez le hub à l écran d accueil et activez Notifications dans Réglages.');
+  }
   const { data } = await api.get('/push/vapid-key/');
   const reg = await navigator.serviceWorker.register('/push-sw.js');
   const permission = await Notification.requestPermission();

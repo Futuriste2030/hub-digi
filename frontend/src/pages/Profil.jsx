@@ -9,7 +9,7 @@ import { Label, Input } from '../components/ui/Input.jsx';
 import { LIBELLES_ROLE } from '../data/session.js';
 import { api, messageErreur } from '../api/client.js';
 import { abonnementActuel, activerPush, desactiverPush, pushSupporte, testerPush } from '../lib/push.js';
-import { biometrieDisponible, biometrieSupportee, enregistrerBiometrie, listerBiometries, supprimerBiometrie } from '../lib/biometrie.js';
+import { biometrieDisponible, biometrieSupportee, enregistrerBiometrie, listerBiometries, messageBiometrie, supprimerBiometrie } from '../lib/biometrie.js';
 import { changerMotDePasse } from '../api/auth.js';
 
 /* Mon profil — infos session, sécurité réelle (POST /auth/password/change/), 2FA, préférences. */
@@ -171,7 +171,7 @@ export default function Profil() {
       setPasskeys(await listerBiometries());
       notifier({ type: 'succes', titre: 'Biométrie activée', texte: 'Prochaine connexion possible par empreinte ou visage.' });
     } catch (e) {
-      notifier({ type: 'info', titre: 'Activation impossible', texte: e.message ?? messageErreur(e) });
+      notifier({ type: 'info', titre: 'Activation impossible', texte: messageBiometrie(e, messageErreur(e)) });
     } finally {
       setBioAction(false);
     }

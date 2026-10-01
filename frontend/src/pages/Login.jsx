@@ -8,7 +8,7 @@ import { useAuth, userVersSession } from '../store/auth.js';
 import { listerClients } from '../api/clients.js';
 import { urlEspace, urlTableauDeBord } from '../lib/acces.js';
 import { demanderReset } from '../api/auth.js';
-import { biometrieSupportee, connecterBiometrie } from '../lib/biometrie.js';
+import { biometrieSupportee, connecterBiometrie, messageBiometrie } from '../lib/biometrie.js';
 import { messageErreur } from '../api/client.js';
 
 /* Connexion réelle : JWT Django. Si la 2FA est active, second écran pour le code. */
@@ -226,7 +226,7 @@ export default function Login() {
       await useAuth.getState().appliquerTokens(data.access, data.refresh);
       allerAccueil(userVersSession(useAuth.getState().user));
     } catch (e) {
-      setErreurBio(e instanceof Error && !e.response ? e.message : messageErreur(e, 'Biométrie impossible, utilisez le mot de passe.'));
+      setErreurBio(e instanceof Error && !e.response ? messageBiometrie(e, 'Biométrie impossible, utilisez le mot de passe.') : messageErreur(e, 'Biométrie impossible, utilisez le mot de passe.'));
     } finally {
       setBioEnCours(false);
     }

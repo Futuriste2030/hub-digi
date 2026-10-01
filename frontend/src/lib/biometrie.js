@@ -6,6 +6,15 @@ import { api } from '../api/client.js';
 export const biometrieSupportee = () =>
   typeof window !== 'undefined' && !!window.PublicKeyCredential;
 
+/* Erreurs navigateur (annulation, capteur verrouillé…) -> message lisible. */
+export function messageBiometrie(e, defaut) {
+  if (e?.name === 'NotAllowedError') return 'Opération refusée ou annulée sur l appareil, réessayez.';
+  if (e?.name === 'AbortError') return 'Opération annulée.';
+  if (e?.name === 'NotSupportedError') return 'Appareil incompatible avec la biométrie.';
+  if (e?.name === 'SecurityError') return 'Biométrie exige une connexion sécurisée HTTPS.';
+  return e?.message ?? defaut;
+}
+
 export async function biometrieDisponible() {
   if (!biometrieSupportee()) return false;
   try {
@@ -60,21 +69,25 @@ const credentialVersJson = (cred) => ({
 });
 
 export async function enregistrerBiometrie(nom = 'Mon appareil') {
-  const { data: options } = await api.post('/auth/webauthn/register/begin/');
+  if (!biometrieSupportee()) throw new Error('Appareil incompatible avec la biométrie.');
+  const { data } = await api.post('/auth/webauthn/register/begin/');
+  const options = typeof data === 'string' ? JSON.parse(data) : data;
   const cred = await navigator.credentials.create({ publicKey: preparerCreation(options) });
   if (!cred) throw new Error('Enregistrement annulé.');
   await api.post('/auth/webauthn/register/complete/', { credential: credentialVersJson(cred), nom });
 }
 
 export async function connecterBiometrie(identifiant) {
-  const { data: options } = await api.post('/auth/webauthn/login/begin/', { identifiant });
+  if (!biometrieSupportee()) throw new Error('Appareil incompatible avec la biométrie.');
+  const { data } = await api.post('/auth/webauthn/login/begin/', { identifiant });
+  const options = typeof data === 'string' ? JSON.parse(data) : data;
   const assertion = await navigator.credentials.get({ publicKey: preparerDemande(options) });
   if (!assertion) throw new Error('Authentification annulée.');
-  const { data, status } = await api.post('/auth/webauthn/login/complete/', {
+  const { data: resultat, status } = await api.post('/auth/webauthn/login/complete/', {
     identifiant,
     credential: credentialVersJson(assertion),
   });
-  return { data, status };
+  return { data: resultat, status };
 }
 
 export async function listerBiometries() {

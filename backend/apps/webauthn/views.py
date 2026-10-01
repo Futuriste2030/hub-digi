@@ -4,6 +4,7 @@ Le login mdp + OTP reste inchangé. Après passkey valide : JWT directs, sauf
 TOTP active (non-client) → même 202 + temp_token que le login mdp.
 """
 
+import json
 from urllib.parse import urlparse
 
 from django.conf import settings
@@ -88,7 +89,7 @@ class PasskeyRegisterBeginView(APIView):
             challenge=bytes_to_base64url(options.challenge),
             usage=PasskeyChallenge.REGISTRATION,
         )
-        return Response(options_to_json(options))
+        return Response(json.loads(options_to_json(options)))
 
 
 class PasskeyRegisterCompleteView(APIView):
@@ -161,7 +162,7 @@ class PasskeyLoginBeginView(APIView):
             challenge=bytes_to_base64url(options.challenge),
             usage=PasskeyChallenge.AUTHENTICATION,
         )
-        return Response(options_to_json(options))
+        return Response(json.loads(options_to_json(options)))
 
 
 class PasskeyLoginCompleteView(APIView):
