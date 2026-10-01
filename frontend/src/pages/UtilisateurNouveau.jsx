@@ -147,7 +147,7 @@ export default function UtilisateurNouveau() {
               <div>
                 <Label htmlFor="nu-role">Rôle *</Label>
                 <select id="nu-role" {...champ('role')} className={selectCls}>
-                  {Object.entries(LIBELLES_ROLE).filter(([v]) => v !== 'super_admin').map(([v, lb]) => <option key={v} value={v}>{lb}</option>)}
+                  {Object.entries(LIBELLES_ROLE).map(([v, lb]) => <option key={v} value={v}>{lb}</option>)}
                 </select>
               </div>
               {form.role === 'client' ? (
