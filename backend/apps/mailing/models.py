@@ -67,7 +67,11 @@ class SentMail(models.Model):
     def expedier(self):
         """Envoi réel (console en dev) + traçabilité. Appelé par la tâche Celery.
         Tout mail part avec le layout charte (comme le reçu) : si le corps n'est
-        pas déjà un document HTML complet, on l'enveloppe (texte brut -> échappé)."""
+        pas déjà un document HTML complet, on l'enveloppe (texte brut -> échappé).
+        Anti-spam : version texte brut systématique (les mails 100 % HTML sont
+        pénalisés) + From avec nom affiché « Digi Com & Technologies »."""
+        from django.utils.html import strip_tags
+
         from apps.mailing.layout import ACCENT_DEFAUT, mise_en_page
 
         corps = self.body_html or ""
@@ -78,8 +82,11 @@ class SentMail(models.Model):
                 corps = escape(corps).replace("\n", "<br>")
             corps = mise_en_page(self.subject, corps, ACCENT_DEFAUT)
             self.body_html = corps
+        adresse = self.identity.from_address if self.identity else None
+        expediteur = f"Digi Com & Technologies <{adresse}>" if adresse else None
+        texte_brut = strip_tags(corps).replace("&nbsp;", " ").strip() or self.subject
         try:
-            send_mail(self.subject, "", self.identity.from_address if self.identity else None,
+            send_mail(self.subject, texte_brut, expediteur,
                       [self.to], html_message=self.body_html, fail_silently=False)
             self.statut = self.STATUT_ENVOYE
         except Exception as exc:

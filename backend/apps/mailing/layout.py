@@ -31,6 +31,29 @@ ACCENTS = {
 }
 
 
+def _coordonnees():
+    """Email + téléphone du footer : SiteSettings (/parametres), repli statique."""
+    try:
+        from apps.core.models import SiteSettings
+
+        s = SiteSettings.instance()
+        return (getattr(s, "email", "") or "contact@digicom.ml",
+                getattr(s, "phone", "") or "(+223) 70 16 33 86")
+    except Exception:
+        return "contact@digicom.ml", "(+223) 70 16 33 86"
+
+
+def _url_logo():
+    """URL absolue du logo (les boîtes mail exigent des URLs absolues, pas de /relatif)."""
+    try:
+        from django.conf import settings
+
+        base = (getattr(settings, "FRONTEND_URL", "") or "https://hub.digicom.ml").rstrip("/")
+        return f"{base}/logo/logo-digi-com.png"
+    except Exception:
+        return "https://hub.digicom.ml/logo/logo-digi-com.png"
+
+
 def bouton(libelle, url):
     """Bouton compatible boîtes mail (tableau + bgcolor, styles inline)."""
     return (
@@ -46,6 +69,8 @@ def bouton(libelle, url):
 
 def mise_en_page(titre, corps, accent=ACCENT_DEFAUT):
     """Enveloppe le contenu (body_html du template) dans le layout charte."""
+    email_contact, phone_contact = _coordonnees()
+    logo = _url_logo()
     return (
         '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -56,6 +81,8 @@ def mise_en_page(titre, corps, accent=ACCENT_DEFAUT):
         '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" '
         'style="max-width:600px;width:100%;">'
         f'<tr><td style="background-color:{MARINE_PROFOND};padding:28px 32px;border-radius:8px 8px 0 0;">'
+        f'<img src="{logo}" alt="Digi Com &amp; Technologies" width="120" '
+        'style="display:block;border:0;outline:none;width:120px;height:auto;margin-bottom:12px;">'
         '<p style="margin:0;font-family:Montserrat,Arial,sans-serif;font-size:20px;font-weight:800;'
         f'letter-spacing:2px;color:{BLANC};">HUB DIGI</p>'
         '<p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:13px;'
@@ -71,6 +98,9 @@ def mise_en_page(titre, corps, accent=ACCENT_DEFAUT):
         '<p style="margin:0;font-family:Arial,sans-serif;font-size:12px;'
         f'color:{BLEU_BRUME};">Digi Com &amp; Technologies — HUB DIGI · Bamako, Mali</p>'
         '<p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:12px;'
-        f'color:{BLEU_BRUME};">Mail automatique, merci de ne pas y répondre directement.</p>'
+        f'color:{BLEU_BRUME};">{email_contact} · {phone_contact}</p>'
+        '<p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:12px;'
+        f'color:{BLEU_BRUME};">Mail automatique, merci de ne pas y répondre directement. '
+        f"Pour nous joindre : {email_contact} · {phone_contact}.</p>"
         "</td></tr></table></td></tr></table></body></html>"
     )
