@@ -317,6 +317,19 @@ export default function Sidebar({ mobileOuvert, fermer, retractee, session }) {
   );
   const [flyout, setFlyout] = useState(null);
 
+  /* Mobile : tiroir toujours déplié avec libellés (les icônes seules + infobulles
+     au survol sont inutilisables au tactile). Le mode compact icônes ne vaut
+     que pour le tiroir fixe desktop. */
+  const compact = retractee && !mobileOuvert;
+
+  /* À l'ouverture du tiroir mobile, déplier la rubrique active pour un accès direct. */
+  useEffect(() => {
+    if (mobileOuvert) {
+      setOuvertes(sections.filter((s) => s.liens.some((l) => estActif(localisation.pathname, l))).map((s) => s.libelle));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileOuvert]);
+
   useEffect(() => {
     if (!flyout) return;
     const touche = (e) => {
@@ -370,12 +383,12 @@ export default function Sidebar({ mobileOuvert, fermer, retractee, session }) {
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-hidden bg-marine-profond transition-all duration-standard ease-[cubic-bezier(0.2,0.6,0.2,1)] lg:sticky lg:top-0 lg:h-screen ${
           mobileOuvert ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 ${retractee ? 'w-28' : 'w-60'}`}
+        } lg:translate-x-0 ${compact ? 'w-28' : 'w-60'}`}
       >
-        <div className={`flex items-center ${retractee ? 'justify-center' : 'justify-between'} px-esp-4 pb-esp-3 pt-esp-4`}>
-          <NavLink to="/" aria-label="HUB DIGI — Accueil" className="flex min-w-0 items-center gap-esp-2">
+        <div className={`flex items-center ${compact ? 'justify-center' : 'justify-between'} px-esp-4 pb-esp-3 pt-esp-4`}>
+          <NavLink to="/" aria-label="HUB DIGI - Accueil" className="flex min-w-0 items-center gap-esp-2">
             <Logo hauteur={40} />
-            {!retractee && (
+            {!compact && (
               <span className="whitespace-nowrap leading-tight">
                 <span className="block font-titrage text-[14px] font-extrabold tracking-[0.06em] text-blanc">
                   HUB DIGI
@@ -384,7 +397,7 @@ export default function Sidebar({ mobileOuvert, fermer, retractee, session }) {
               </span>
             )}
           </NavLink>
-          {!retractee && (
+          {!compact && (
             <button
               type="button"
               onClick={fermer}
@@ -398,11 +411,11 @@ export default function Sidebar({ mobileOuvert, fermer, retractee, session }) {
 
         <nav
           aria-label="Navigation principale"
-          className={`dg-scroll-fin min-h-0 flex-1 overflow-y-auto pb-esp-3 ${retractee ? 'px-esp-2' : 'px-esp-3'}`}
+          className={`dg-scroll-fin min-h-0 flex-1 overflow-y-auto pb-esp-3 ${compact ? 'px-esp-2' : 'px-esp-3'}`}
         >
           <ul className="flex flex-col gap-esp-1">
             {sections.map((section) =>
-              retractee ? (
+              compact ? (
                 <SectionReduite
                   key={section.libelle}
                   section={section}
@@ -427,8 +440,8 @@ export default function Sidebar({ mobileOuvert, fermer, retractee, session }) {
           </ul>
         </nav>
 
-        <div className={`border-t border-marine-clair ${retractee ? 'p-esp-2' : 'p-esp-3'}`}>
-          {retractee ? (
+        <div className={`border-t border-marine-clair ${compact ? 'p-esp-2' : 'p-esp-3'}`}>
+          {compact ? (
             <div className="flex flex-col gap-esp-1">
               {peutParametres && (
                 <BoutonIcone

@@ -108,7 +108,7 @@ export default function AppLayout() {
                 aria-hidden="true"
                 className={`h-2 w-2 rounded-pilule ${apiOk === false ? 'bg-erreur' : apiOk === true ? 'bg-succes-lumineux' : 'bg-gris-400'}`}
               />
-              {apiOk === null ? 'Vérification API…' : apiOk ? 'API connectée' : 'API injoignable'}
+              {apiOk === null ? 'Vérification…' : apiOk ? 'Système opérationnel' : 'Connexion interrompue'}
             </p>
           </div>
         </footer>
