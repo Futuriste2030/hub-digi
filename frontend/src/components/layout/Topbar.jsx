@@ -244,7 +244,7 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
           <div className="relative" ref={chatRef}>
             <BoutonIcone Icone={MessageSquareText} compteur={nonLusC} actif={menu === 'chat'} libelle="Messages" onClick={() => basculerMenu('chat', async () => { chargerCentre(); try { setUsers(await listerUsersMini()); } catch { /* liste optionnelle */ } })} />
             {menu === 'chat' && (
-              <div className="dg-pop absolute right-0 top-[calc(100%+8px)] z-50 w-[360px] rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4">
+              <div className="dg-pop fixed inset-x-3 top-[68px] z-50 rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[360px]">
                 <p className="px-esp-3 pb-esp-1 pt-esp-2 font-titrage text-[12px] font-bold uppercase leading-[1.2] tracking-[0.16em] text-gris-600">Chat interne</p>
                 {!filAvec ? (
                   <>
@@ -310,7 +310,7 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
           <div className="relative" ref={notifRef}>
             <BoutonIcone Icone={Bell} compteur={nonLuesN} actif={menu === 'notif'} libelle="Notifications" onClick={() => basculerMenu('notif', chargerCentre)} />
             {menu === 'notif' && (
-              <div className="dg-pop absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4">
+              <div className="dg-pop fixed inset-x-3 top-[68px] z-50 rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[340px]">
                 <div className="flex items-center justify-between px-esp-3 pb-esp-1 pt-esp-2">
                   <p className="font-titrage text-[12px] font-bold uppercase leading-[1.2] tracking-[0.16em] text-gris-600">Notifications</p>
                   {nonLuesN > 0 && (
@@ -367,7 +367,7 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
               <ChevronDown size={16} aria-hidden="true" className="hidden text-gris-500 xl:block" />
             </button>
             {menu === 'profil' && (
-              <div className="dg-pop absolute right-0 top-[calc(100%+8px)] z-50 w-72 rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4">
+              <div className="dg-pop fixed inset-x-3 top-[68px] z-50 rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-72">
                 <div className="mb-esp-1 flex items-center gap-esp-3 border-b border-gris-300 p-esp-3">
                   <span aria-hidden="true" className="flex h-11 w-11 items-center justify-center rounded-pilule font-titrage text-[15px] font-extrabold text-blanc" style={{ background: 'var(--degrade-bleu)' }}>
                     {session?.initiales ?? 'SA'}

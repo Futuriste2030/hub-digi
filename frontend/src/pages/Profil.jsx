@@ -207,12 +207,12 @@ export default function Profil() {
             )}
             {doubleAuth === false && qr && (
               <form onSubmit={confirmer2fa} className="flex flex-col gap-esp-4">
-                <div className="flex flex-wrap items-start gap-esp-5">
-                  <span className="rounded-lg border border-gris-300 bg-gris-0 p-esp-3">
-                    <QRCode value={qr.otpauth_url} size={180} aria-label="QR à scanner dans l application authenticator" />
+                <div className="flex flex-col items-center gap-esp-4 sm:flex-row sm:items-start sm:gap-esp-5">
+                  <span className="shrink-0 rounded-lg border border-gris-300 bg-gris-0 p-esp-3">
+                    <QRCode value={qr.otpauth_url} size={168} aria-label="QR à scanner dans l application authenticator" />
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-courant text-[15px] text-gris-600">Sans scan possible, saisissez ce secret à la main :</p>
+                  <div className="min-w-0 w-full flex-1">
+                    <p className="text-center font-courant text-[15px] text-gris-600 sm:text-left">Sans scan possible, saisissez ce secret à la main :</p>
                     <p className="mt-esp-2 break-all rounded-md bg-gris-100 p-esp-3 font-mono text-[13px] text-gris-900">{qr.secret}</p>
                   </div>
                 </div>
