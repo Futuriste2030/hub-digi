@@ -216,10 +216,16 @@ export default function Profil() {
     }
     setEnvoiSign(true);
     try {
-      await signerContrat(signatureCible.id, { nom: nomSign.trim(), lu_approuve: true });
+      const nom = nomSign.trim();
+      await signerContrat(signatureCible.id, { nom, lu_approuve: true });
+      const idSigne = signatureCible.id;
       setSignatureCible(null);
       setNomSign('');
       setLuApprouve(false);
+      /* Bascule immédiate du badge, puis synchro serveur (vérité juridique). */
+      setContrats((prev) => prev.map((c) => c.id === idSigne
+        ? { ...c, signe_employe: true, signature_employe_nom: nom, signature_employe_le: new Date().toISOString() }
+        : c));
       await chargerContrats();
       notifier({ type: 'succes', titre: 'Contrat signé', texte: 'Votre signature électronique est archivée côté Juridique.' });
     } catch (err) {

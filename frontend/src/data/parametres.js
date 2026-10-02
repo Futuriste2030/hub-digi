@@ -85,8 +85,7 @@ export async function chargerEntreprise() {
   return getEntreprise();
 }
 
-export async function majEntreprise(valeurs) {
-  const fusion = { ...CACHE, ...valeurs };
+export async function majEntreprise(valeurs) {  const fusion = { ...CACHE, ...valeurs };
   const joints = Object.keys(CHAMPS_FICHIER).filter((k) => fusion[k] instanceof File);
   let data;
   if (joints.length > 0) {
@@ -98,6 +97,15 @@ export async function majEntreprise(valeurs) {
   } else {
     ({ data } = await api.patch('/settings/entreprise/', versApi(fusion)));
   }
+  memoriser(versCache(data));
+  return getEntreprise();
+}
+
+/* Suppression d'un cachet/signature déjà importé (JSON null, fichier purgé serveur). */
+export async function supprimerTampon(cle) {
+  const champApi = CHAMPS_FICHIER[cle];
+  if (!champApi) throw new Error('Tampon inconnu.');
+  const { data } = await api.patch('/settings/entreprise/', { [champApi]: null });
   memoriser(versCache(data));
   return getEntreprise();
 }

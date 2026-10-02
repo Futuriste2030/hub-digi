@@ -4,7 +4,8 @@ import { Building2, ReceiptText, Save, Stamp, Upload, Users, ArrowRight, Message
 import Button from '../components/ui/Button.jsx';
 import { Card, CardHeader, CardBody } from '../components/ui/Card.jsx';
 import { Label, Input, Textarea } from '../components/ui/Input.jsx';
-import { chargerEntreprise, getEntreprise, majEntreprise } from '../data/parametres.js';
+import { chargerEntreprise, getEntreprise, majEntreprise, supprimerTampon } from '../data/parametres.js';
+import BoutonSupprimer from '../components/ui/BoutonSupprimer.jsx';
 import { messageErreur } from '../api/client.js';
 
 /* Paramètres société — infos reprises sur factures et reçus (SPEC §5.1). */
@@ -36,6 +37,21 @@ export default function Parametres() {
   };
 
   const apercuTampon = (cle) => apercusTampons[cle] ?? (typeof form[cle] === 'string' ? form[cle] : null);
+
+  const retirerTampon = async (cle, libelle) => {
+    try {
+      const maj = await supprimerTampon(cle);
+      setForm(maj);
+      setApercusTampons((a) => {
+        const copie = { ...a };
+        delete copie[cle];
+        return copie;
+      });
+      notifier({ type: 'succes', titre: 'Fichier supprimé', texte: `${libelle} retiré des documents.` });
+    } catch (err) {
+      notifier({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(err) });
+    }
+  };
 
   useEffect(() => {
     chargerEntreprise().then(setForm);
@@ -233,7 +249,17 @@ export default function Parametres() {
                 : null;
               return (
               <div key={cle} className="rounded-lg border border-gris-300 bg-gris-100 p-esp-4">
-                <p className="font-courant text-[15px] font-semibold text-gris-900">{libelle}</p>
+                <div className="flex items-start justify-between gap-esp-2">
+                  <p className="font-courant text-[15px] font-semibold text-gris-900">{libelle}</p>
+                  {apercuTampon(cle) && (
+                    <BoutonSupprimer
+                      titre={`Retirer ${libelle}`}
+                      libelle={libelle}
+                      texte="Retirer définitivement ce fichier des documents"
+                      onConfirmer={() => retirerTampon(cle, libelle)}
+                    />
+                  )}
+                </div>
                 {apercuTampon(cle) ? (
                   <span className="relative mt-esp-2 inline-block">
                     <img src={apercuTampon(cle)} alt={libelle} className="h-24 w-auto rounded-md border border-gris-300 bg-gris-0 object-contain" />

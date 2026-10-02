@@ -239,17 +239,27 @@ class SiteSettingsView(APIView):
         if request.user.role != "super_admin":
             return Response({"detail": "Réservé Super Admin."}, status=403)
         obj = SiteSettings.instance()
-        for champ in ("cachet_finance", "signature_finance", "cachet_juridique", "signature_juridique",
-                        "cachet_secretariat"):
+        champs_fichier = ("cachet_finance", "signature_finance", "cachet_juridique", "signature_juridique",
+                          "cachet_secretariat")
+        for champ in champs_fichier:
             fichier = request.FILES.get(champ)
             if fichier:
                 if not fichier.content_type.startswith("image/"):
                     return Response({champ: "Image uniquement (PNG, JPG, WebP)."}, status=400)
                 if fichier.size > 2 * 1024 * 1024:
                     return Response({champ: "2 Mo maximum."}, status=400)
+        anciens = {ch: (getattr(obj, ch).name if getattr(obj, ch) else None) for ch in champs_fichier}
         ser = SiteSettingsSerializer(obj, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
+        for ch, ancien_nom in anciens.items():
+            nouveau = getattr(obj, ch)
+            nouveau_nom = nouveau.name if nouveau else None
+            if ancien_nom and ancien_nom != nouveau_nom:
+                try:
+                    (nouveau.storage if nouveau else obj._meta.get_field(ch).storage).delete(ancien_nom)
+                except Exception:
+                    pass
         return Response(ser.data)
 
 
