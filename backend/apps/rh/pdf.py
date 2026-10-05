@@ -51,13 +51,14 @@ def rapport_pointage_pdf(rapport):
         f"Jours ouvrés : {rapport['jours_ouvres']} — Horaires 08h00–17h00 (retard après 08h15).", corps))
     elements.append(Spacer(1, 4 * mm))
 
-    donnees = [["Employé", "Prés.", "Retards", "Dép. ant.", "Abs.", "Heures", "Score"]]
+    donnees = [["Employé", "Prés.", "Retards", "Dép. ant.", "Congés", "Abs.", "Heures", "Score"]]
     for l in rapport["lignes"]:
         donnees.append([
             Paragraph(l["email"], cellule), str(l["presents"]), str(l["retards"]),
-            str(l["departs_anticipes"]), str(l["absences"]), str(l["heures"]), str(l["score"]),
+            str(l["departs_anticipes"]), str(l.get("conges", 0)), str(l["absences"]),
+            str(l["heures"]), str(l["score"]),
         ])
-    tableau = Table(donnees, colWidths=[62 * mm, 16 * mm, 18 * mm, 18 * mm, 14 * mm, 18 * mm, 16 * mm],
+    tableau = Table(donnees, colWidths=[56 * mm, 14 * mm, 16 * mm, 16 * mm, 14 * mm, 12 * mm, 16 * mm, 14 * mm],
                     repeatRows=1)
     style = [("BACKGROUND", (0, 0), (-1, 0), MARINE),
              ("TEXTCOLOR", (0, 0), (-1, 0), BLANC),

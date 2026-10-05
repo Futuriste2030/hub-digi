@@ -132,7 +132,7 @@ export default function Rapports() {
               <table className="w-full min-w-[720px] border-collapse text-left">
                 <thead>
                   <tr className="border-b border-gris-300">
-                    {['Employé', 'Présents', 'Retards', 'Dép. ant.', 'Absences', 'Heures', 'Score'].map((col) => (
+                    {['Employé', 'Présents', 'Retards', 'Dép. ant.', 'Congés', 'Absences', 'Heures', 'Score'].map((col) => (
                       <th key={col} scope="col" className="px-esp-3 pb-esp-2 font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">{col}</th>
                     ))}
                   </tr>
@@ -144,6 +144,7 @@ export default function Rapports() {
                       <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{l.presents} j</td>
                       <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{l.retards}</td>
                       <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{l.departs_anticipes}</td>
+                      <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{l.conges}</td>
                       <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{l.absences}</td>
                       <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{l.heures} h</td>
                       <td className="px-esp-3 py-esp-3 font-courant text-[15px] font-semibold text-gris-900 dg-tnum">{l.score}</td>
@@ -152,7 +153,7 @@ export default function Rapports() {
                 </tbody>
               </table>
               <p className="dg-legende mt-esp-2 px-esp-3">
-                {rapport.jours_ouvres} jours ouvrés · Score = présence 40 + ponctualité 30 + heures 20 + assiduité 10.
+                {rapport.jours_ouvres} jours ouvrés · Congés validés exclus des absences et du score · Score = présence 40 + ponctualité 30 + heures 20 + assiduité 10.
               </p>
             </CardBody>
           </Card>

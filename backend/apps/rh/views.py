@@ -448,8 +448,18 @@ def _rapport_mensuel(mois):
         heures = 0.0
         for p in pts.filter(heure_arrivee__isnull=False, heure_depart__isnull=False):
             heures += (p.heure_depart - p.heure_arrivee).total_seconds() / 3600
-        absences = max(jours_ouvres - presents, 0)
-        presence = min(presents / max(jours_ouvres, 1), 1) if jours_ouvres else 0
+        # Jours de congé validé (ouvrés) : ni absences, ni dus pour le score.
+        conges_ouvres = 0
+        if fin_ouvres >= premier:
+            for c in Leave.objects.filter(employe=emp, statut=Leave.STATUT_VALIDE,
+                                          du_jour__lte=fin_ouvres, au_jour__gte=premier):
+                debut = max(c.du_jour, premier)
+                fin_c = min(c.au_jour, fin_ouvres)
+                conges_ouvres += sum(1 for i in range((fin_c - debut).days + 1)
+                                     if (debut + timedelta(days=i)).weekday() < 5)
+        dus = max(jours_ouvres - conges_ouvres, 0)
+        absences = max(dus - presents, 0)
+        presence = min(presents / dus, 1) if dus else 0
         ponctualite = ((presents - retards) / presents) if presents else 0
         taux_heures = min(heures / (presents * HEURES_JOUR_ATTENDUES), 1) if presents else 0
         score = round(presence * 40 + ponctualite * 30 + taux_heures * 20
@@ -460,6 +470,7 @@ def _rapport_mensuel(mois):
             "presents": presents,
             "retards": retards,
             "departs_anticipes": anticipes,
+            "conges": conges_ouvres,
             "absences": absences,
             "heures": round(heures, 1),
             "score": score,

@@ -185,7 +185,7 @@ Statuts: `Planifiée -> PV en rédaction -> Clôturée`.
 4. [x] Liste RH `/rh/pointage` (+ entrée sidebar « Pointer » `/pointage` pour tous les internes, ex. départ 17h00) ; tous modèles visibles `/admin/` (pointages/QR en lecture seule).
 7. [x] Congé validé couvrant le jour -> login normal, aucun écran (ni QR, ni scan).
 8. [x] Scan refusé pour position -> `TentativePointage` conservée (employé, jour, type, GPS, distance) ; section « Scans refusés » dans `/rh/pointage` avec boutons **Valider / Rejeter** (`PATCH /rh/tentatives/:id/valider|rejeter/`, super_admin/admin : ex. intempéries) ; Valider crée le pointage (mêmes règles d'horaires, GPS dispensé).
-5. [x] Rapport mensuel auto `GET /rh/pointage/rapport/?mois=` (présents, retards, départs anticipés, absences vs jours ouvrés lun–ven, heures, score /100 = présence 40 + ponctualité 30 + heures 20 + assiduité 10) + PDF `rapport/pdf/` (charte marine).
+5. [x] Rapport mensuel auto `GET /rh/pointage/rapport/?mois=` (présents, retards, départs anticipés, congés validés **exclus** des absences et des jours dus, absences vs jours ouvrés lun–ven, heures, score /100 = présence 40 + ponctualité 30 + heures 20 + assiduité 10) + PDF `rapport/pdf/` (charte marine).
 6. [x] Employé du mois auto (meilleur score, départage : retards puis heures) + `Prime` créée (montant `SitePointage.prime_montant`, défaut 25 000 F) `validee=False` -> `PATCH /rh/primes/:id/valider/` (chef_rh/admin/super_admin). Page `/rh/rapports`.
 
 **Workflow Congés (backend Django, Celery + mails) :**
