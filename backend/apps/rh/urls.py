@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (CandidatureWebhookView, EmployeeViewSet, LeaveViewSet, PointageScanView,
                     PointageStatutView, PointageViewSet, PrimeViewSet, QRChallengeView,
-                    RapportMensuelView, RapportPdfView)
+                    RapportMensuelView, RapportPdfView, TentativeViewSet)
 from .models import Candidature
 from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -39,6 +39,7 @@ router.register("rh/leaves", LeaveViewSet, basename="leave")
 router.register("rh/recruitments", CandidatureViewSet, basename="candidature")
 router.register("rh/pointages", PointageViewSet, basename="pointage")
 router.register("rh/primes", PrimeViewSet, basename="prime")
+router.register("rh/tentatives", TentativeViewSet, basename="tentative")
 
 urlpatterns = [
     path("rh/candidatures/", CandidatureWebhookView.as_view(), name="candidature-webhook"),

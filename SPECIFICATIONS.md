@@ -183,6 +183,8 @@ Statuts: `Planifiée -> PV en rédaction -> Clôturée`.
 2. [x] Desktop affiche le QR dynamique (`POST /rh/pointage/qr/` : payload signé HMAC `TimestampSigner`, TTL 60 s, usage unique via `QRToken`, renouvelé toutes les 10 s, aucun bouton de contournement). Le mobile (même compte) vise le QR via la caméra (`html5-qrcode`) -> GPS du mobile + `POST /rh/pointage/scan/`.
 3. [x] Vérifications serveur : signature + expiry + anti-rejeu (nonce brûlé) + appartenance employé + distance haversine ≤ `rayon_m` (**150 m** des coordonnées entreprise saisies dans `SitePointage`) + plage 08h00–17h30. Type auto : `arrivee` (retard après 08h00 + 15 min = **08h15**) puis `depart` dès 12h00 (anticipé avant 17h00, normal après). Un pointage/jour/employé.
 4. [x] Liste RH `/rh/pointage` (+ entrée sidebar « Pointer » `/pointage` pour tous les internes, ex. départ 17h00) ; tous modèles visibles `/admin/` (pointages/QR en lecture seule).
+7. [x] Congé validé couvrant le jour -> login normal, aucun écran (ni QR, ni scan).
+8. [x] Scan refusé pour position -> `TentativePointage` conservée (employé, jour, type, GPS, distance) ; section « Scans refusés » dans `/rh/pointage` avec boutons **Valider / Rejeter** (`PATCH /rh/tentatives/:id/valider|rejeter/`, super_admin/admin : ex. intempéries) ; Valider crée le pointage (mêmes règles d'horaires, GPS dispensé).
 5. [x] Rapport mensuel auto `GET /rh/pointage/rapport/?mois=` (présents, retards, départs anticipés, absences vs jours ouvrés lun–ven, heures, score /100 = présence 40 + ponctualité 30 + heures 20 + assiduité 10) + PDF `rapport/pdf/` (charte marine).
 6. [x] Employé du mois auto (meilleur score, départage : retards puis heures) + `Prime` créée (montant `SitePointage.prime_montant`, défaut 25 000 F) `validee=False` -> `PATCH /rh/primes/:id/valider/` (chef_rh/admin/super_admin). Page `/rh/rapports`.
 
@@ -353,6 +355,7 @@ SitePointage(id, nom, latitude, longitude, rayon_m=150, heure_arrivee=08:00, heu
 QRToken(id, employe FK, nonce unique, expire_le, utilise)
 Pointage(id, employe FK, date unique/employe, heure_arrivee, statut_arrivee, heure_depart, statut_depart, lat/lng, distance_m)
 Prime(id, employe FK, mois AAAA-MM unique/employe, montant, motif, validee)
+TentativePointage(id, employe FK, date, type arrivee/depart, lat/lng, distance_m, statut en_attente/validee/rejetee, valideur)
 Candidature(id, offre_reference, offre_titre, nom, email, source site/manuelle, statut)
 EmailIdentity(id, department FK unique, from_address, smtp_* (connexion dynamique NON branchée))
 SentMail(id, identity FK, to, subject, client FK null, ...)
@@ -373,7 +376,7 @@ GET/POST /api/v1/auth/login/ refresh/ me/ + otp/ (setup/confirm/verify/disable/s
 /api/v1/com/campaigns/ calendar/ medias/ communiques/
 /api/v1/finance/quotes/ (:id/valider/ :id/rejeter/) invoices/ (:id/pdf/ :id/payer/ :id/envoyer/) receipts/ (:id/pdf/) expenses/ paie/ (:id/ajouter_ligne/, lignes, cloturer, cachet)
 /api/v1/fournisseurs/ :id/overview/ + fournisseurs-factures/ (valider/payer/pdf) + fournisseurs-paiements/ (pdf) + fournisseurs-commandes/ (valider/envoyer/convertir/pdf) + fournisseurs-livraisons/ (valider/pdf)
-/api/v1/rh/employees/ leaves/ leaves/:id/validate/ recruitments/ + candidatures/ (webhook public X-Hub-Token, throttle) + pointage/statut/ pointage/qr/ pointage/scan/ pointages/ pointage/rapport/ (+ /pdf/) primes/ (:id/valider/)
+/api/v1/rh/employees/ leaves/ leaves/:id/validate/ recruitments/ + candidatures/ (webhook public X-Hub-Token, throttle) + pointage/statut/ pointage/qr/ pointage/scan/ pointages/ pointage/rapport/ (+ /pdf/) primes/ (:id/valider/) tentatives/ (:id/valider|rejeter/)
 /api/v1/juridique/contracts/ (:id/pdf/) disputes/
 /api/v1/tickets/ (:id/qualify/ :id/request-approval/ :id/approve/ :id/reply/ :id/messages/ :id/approvals/ :id/clore/ :id/rouvrir/ :id/rejeter/) approvals/
 /api/v1/secretariat/courriers/ reunions/ (:id/decider/, decisions/:id/convertir/) decharges/

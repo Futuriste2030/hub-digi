@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from .models import Candidature, Employee, Leave, Pointage, Prime, QRToken, SitePointage
+from .models import (Candidature, Employee, Leave, Pointage, Prime, QRToken, SitePointage,
+                     TentativePointage)
 
 
 @admin.register(Employee)
@@ -54,3 +55,14 @@ class QRTokenAdmin(admin.ModelAdmin):
 class PrimeAdmin(admin.ModelAdmin):
     list_display = ("employe", "mois", "montant", "validee")
     list_filter = ("mois", "validee")
+
+
+@admin.register(TentativePointage)
+class TentativePointageAdmin(admin.ModelAdmin):
+    list_display = ("employe", "date", "type", "distance_m", "statut", "cree_le")
+    list_filter = ("statut", "type", "date")
+    readonly_fields = ("employe", "date", "type", "latitude", "longitude", "distance_m",
+                       "statut", "valideur", "cree_le")
+
+    def has_add_permission(self, request):
+        return False

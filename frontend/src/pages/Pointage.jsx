@@ -39,6 +39,7 @@ export default function Pointage() {
   const [scanOuvert, setScanOuvert] = useState(false);
   const [scanEnCours, setScanEnCours] = useState(false);
   const [resultat, setResultat] = useState(null);
+  const [transmise, setTransmise] = useState(false);
   const [erreur, setErreur] = useState('');
   const lecteurRef = useRef(null);
 
@@ -98,6 +99,7 @@ export default function Pointage() {
     setScanOuvert(false);
     setScanEnCours(true);
     setErreur('');
+    setTransmise(false);
     try {
       const pos = await positionGps();
       const r = await scannerPointage({ qr: texte, ...pos });
@@ -105,6 +107,7 @@ export default function Pointage() {
       notifier({ type: 'succes', titre: `Pointage ${TYPE_LABEL[r.type] ?? r.type} enregistré`, texte: `${r.heure} — ${r.statut === 'retard' ? 'en retard' : r.statut === 'anticipe' ? 'départ anticipé' : 'à l heure'}.` });
     } catch (e) {
       setErreur(messageErreur(e, 'Pointage impossible.'));
+      if (e?.response?.data?.tentative_id) setTransmise(true);
     } finally {
       setScanEnCours(false);
     }
@@ -193,6 +196,13 @@ export default function Pointage() {
       </p>
 
       {erreur && <div className="mt-esp-4"><Alert ton="erreur" titre="Pointage impossible">{erreur}</Alert></div>}
+      {transmise && !resultat && (
+        <div className="mt-esp-4">
+          <Alert ton="info" titre="Demande transmise">
+            L administration peut autoriser ce scan (intempéries, GPS imprécis) depuis la liste des pointages.
+          </Alert>
+        </div>
+      )}
 
       <Card survol={false} className="mt-esp-6">
         <CardBody className="flex flex-col items-center gap-esp-3 py-esp-6">

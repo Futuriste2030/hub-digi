@@ -43,6 +43,10 @@ export const listerPointages = (params) => toutLister('/rh/pointages/', params);
 export const rapportPointage = (mois) => get('/rh/pointage/rapport/', { mois });
 export const listerPrimes = (params) => toutLister('/rh/primes/', params);
 export const validerPrime = (id) => patch(`/rh/primes/${id}/valider/`, {});
+/* Scans refusés (position) — validation super_admin/admin (ex. intempéries). */
+export const listerTentatives = (params) => toutLister('/rh/tentatives/', params);
+export const validerTentative = (id) => patch(`/rh/tentatives/${id}/valider/`, {});
+export const rejeterTentative = (id) => patch(`/rh/tentatives/${id}/rejeter/`, {});
 export const listerContrats = (params) => toutLister('/juridique/contracts/', params);
 export const creerContrat = (payload) => post('/juridique/contracts/', payload);
 export const majContrat = (id, payload) => patch(`/juridique/contracts/${id}/`, payload);

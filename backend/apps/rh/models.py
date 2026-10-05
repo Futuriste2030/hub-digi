@@ -159,3 +159,34 @@ class Prime(models.Model):
 
     def __str__(self):
         return f"Prime {self.mois} — {self.employe} ({self.montant} F)"
+
+
+class TentativePointage(models.Model):
+    """Scan refusé pour position hors zone — l'administration peut le valider
+    (ex. intempéries / GPS imprécis) : la validation crée le pointage."""
+
+    STATUT_ATTENTE = "en_attente"
+    STATUT_VALIDEE = "validee"
+    STATUT_REJETEE = "rejetee"
+    STATUTS = [(STATUT_ATTENTE, "En attente"), (STATUT_VALIDEE, "Validée"),
+               (STATUT_REJETEE, "Rejetée")]
+    TYPE_ARRIVEE = "arrivee"
+    TYPE_DEPART = "depart"
+    TYPES = [(TYPE_ARRIVEE, "Arrivée"), (TYPE_DEPART, "Départ")]
+
+    employe = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="tentatives")
+    date = models.DateField(help_text="Jour de la tentative.")
+    type = models.CharField(max_length=10, choices=TYPES)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    distance_m = models.FloatField(help_text="Distance à l'entreprise au moment du scan.")
+    statut = models.CharField(max_length=10, choices=STATUTS, default=STATUT_ATTENTE)
+    valideur = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name="tentatives_validees")
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-cree_le"]
+
+    def __str__(self):
+        return f"Tentative {self.type} — {self.employe} ({int(self.distance_m)} m, {self.statut})"

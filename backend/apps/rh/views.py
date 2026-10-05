@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from .models import Candidature, Employee, Leave, Pointage, Prime, QRToken, SitePointage
+from .models import Candidature, Employee, Leave, Pointage, Prime, QRToken, SitePointage, TentativePointage
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -147,6 +147,14 @@ def _employeur(user):
         return None
 
 
+def _en_conge(employe, jour):
+    """Congé validé couvrant ce jour : aucun pointage requis (login normal)."""
+    return Leave.objects.filter(
+        employe=employe, statut=Leave.STATUT_VALIDE,
+        du_jour__lte=jour, au_jour__gte=jour,
+    ).exists()
+
+
 def _type_attendu(employe, site, maintenant):
     """arrivee | depart | rien — selon pointage du jour + heure serveur."""
     pt = Pointage.objects.filter(employe=employe, date=maintenant.date()).first()
@@ -179,6 +187,8 @@ class PointageStatutView(APIView):
         employe = _employeur(request.user)
         if employe is None:
             return Response({"doit_pointer": False, "motif": "Aucune fiche employé liée."})
+        if _en_conge(employe, maintenant.date()):
+            return Response({"doit_pointer": False, "motif": "En congé — aucun pointage requis."})
         # Plage 08h00–17h00 + marge de sortie 30 min (départ scannable jusqu'à 17h30).
         fin = (datetime.combine(maintenant.date(), site.heure_depart)
                + timedelta(minutes=MARGE_SORTIE_MIN)).time()
@@ -207,6 +217,8 @@ class QRChallengeView(APIView):
         if employe is None:
             return Response({"detail": "Aucune fiche employé liée."}, status=400)
         maintenant = timezone.localtime()
+        if _en_conge(employe, maintenant.date()):
+            return Response({"detail": "En congé — aucun pointage requis."}, status=400)
         type_attendu, _pt = _type_attendu(employe, _site_actif(), maintenant)
         if type_attendu == "rien":
             return Response({"detail": "Rien à pointer pour le moment."}, status=400)
@@ -234,7 +246,10 @@ class PointageScanView(APIView):
         employe = _employeur(request.user)
         if employe is None:
             return Response({"detail": "Aucune fiche employé liée."}, status=400)
-        # 1. QR signé, TTL 120 s.
+        maintenant = timezone.localtime()
+        if _en_conge(employe, maintenant.date()):
+            return Response({"detail": "En congé — aucun pointage requis."}, status=400)
+        # 1. QR signé, TTL court.
         try:
             contenu = signing.TimestampSigner(salt=QR_SALT).unsign(
                 request.data.get("qr", ""), max_age=QR_TTL_S)
@@ -249,18 +264,7 @@ class PointageScanView(APIView):
             return Response({"detail": "QR inconnu."}, status=400)
         if token.utilise or token.expire_le < timezone.now():
             return Response({"detail": "QR déjà utilisé ou expiré — régénérez-le."}, status=400)
-        # 2. GPS entreprise (anti-fraude localisation).
-        try:
-            lat = float(request.data.get("latitude"))
-            lng = float(request.data.get("longitude"))
-        except (TypeError, ValueError):
-            return Response({"detail": "Position GPS requise."}, status=400)
-        distance = _distance_m(lat, lng, site.latitude, site.longitude)
-        if distance > site.rayon_m:
-            return Response({"detail": f"Hors zone entreprise ({int(distance)} m, limite {site.rayon_m} m)."},
-                            status=403)
-        # 3. Horaires serveur 08h00–17h00 + marge de sortie 30 min.
-        maintenant = timezone.localtime()
+        # 2. Horaires serveur 08h00–17h00 + marge de sortie 30 min.
         fin = (datetime.combine(maintenant.date(), site.heure_depart)
                + timedelta(minutes=MARGE_SORTIE_MIN)).time()
         if not (site.heure_arrivee <= maintenant.time() < fin):
@@ -268,6 +272,25 @@ class PointageScanView(APIView):
         type_attendu, _pt = _type_attendu(employe, site, maintenant)
         if type_attendu == "rien":
             return Response({"detail": "Pointage du jour déjà terminé."}, status=400)
+        # 3. GPS entreprise (anti-fraude localisation). Hors zone : la tentative
+        # est conservée pour validation manuelle (intempéries / GPS imprécis).
+        try:
+            lat = float(request.data.get("latitude"))
+            lng = float(request.data.get("longitude"))
+        except (TypeError, ValueError):
+            return Response({"detail": "Position GPS requise."}, status=400)
+        distance = _distance_m(lat, lng, site.latitude, site.longitude)
+        if distance > site.rayon_m:
+            tent, _new = TentativePointage.objects.get_or_create(
+                employe=employe, date=maintenant.date(), type=type_attendu,
+                statut=TentativePointage.STATUT_ATTENTE,
+                defaults={"latitude": lat, "longitude": lng, "distance_m": round(distance, 1)},
+            )
+            return Response({
+                "detail": f"Hors zone entreprise ({int(distance)} m, limite {site.rayon_m} m). "
+                          "Demande transmise à l'administration.",
+                "tentative_id": tent.id,
+            }, status=403)
         pt, _created = Pointage.objects.get_or_create(
             employe=employe, date=maintenant.date(),
             defaults={"latitude": lat, "longitude": lng, "distance_m": round(distance, 1)},
@@ -316,6 +339,86 @@ class PointageViewSet(viewsets.ReadOnlyModelViewSet):
             return qs
         employe = _employeur(self.request.user)
         return qs.filter(employe=employe) if employe else qs.none()
+
+
+class TentativeSerializer(serializers.ModelSerializer):
+    email = serializers.CharField(source="employe.user.email", read_only=True)
+
+    class Meta:
+        model = TentativePointage
+        fields = ["id", "employe", "email", "date", "type", "latitude", "longitude",
+                  "distance_m", "statut", "valideur", "cree_le"]
+
+
+class TentativeViewSet(viewsets.ReadOnlyModelViewSet):
+    """Scans refusés (position) — validation super_admin/admin (ex. intempéries)."""
+
+    serializer_class = TentativeSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ["employe", "date", "type", "statut"]
+    ordering = ["-cree_le"]
+
+    def get_queryset(self):
+        qs = TentativePointage.objects.select_related("employe__user").all()
+        if self.request.user.role in ROLES_RH_TOUS:
+            return qs
+        employe = _employeur(self.request.user)
+        return qs.filter(employe=employe) if employe else qs.none()
+
+    def _appliquer_validation(self, request, valide):
+        if request.user.role not in ("super_admin", "admin"):
+            return Response({"detail": "Validation réservée au Super Admin / Administration."},
+                            status=403)
+        tent = self.get_object()
+        if tent.statut != TentativePointage.STATUT_ATTENTE:
+            return Response({"detail": "Demande déjà traitée."}, status=400)
+        if valide:
+            site = _site_actif()
+            pt, _created = Pointage.objects.get_or_create(
+                employe=tent.employe, date=tent.date,
+                defaults={"latitude": tent.latitude, "longitude": tent.longitude,
+                          "distance_m": tent.distance_m},
+            )
+            heure = timezone.localtime(tent.cree_le)
+            if tent.type == TentativePointage.TYPE_ARRIVEE:
+                if pt.heure_arrivee is not None:
+                    return Response({"detail": "Arrivée déjà pointée ce jour-là."}, status=400)
+                limite = None
+                if site is not None:
+                    limite = (datetime.combine(tent.date, site.heure_arrivee)
+                              + timedelta(minutes=site.tolerance_retard_min)).time()
+                pt.heure_arrivee = tent.cree_le
+                pt.statut_arrivee = (Pointage.STATUT_RETARD
+                                     if limite is not None and heure.time() > limite
+                                     else Pointage.STATUT_HEURE)
+                pt.latitude = tent.latitude
+                pt.longitude = tent.longitude
+                pt.distance_m = tent.distance_m
+            else:
+                if pt.heure_arrivee is None:
+                    return Response({"detail": "Arrivée manquante : validez d'abord une arrivée."},
+                                    status=400)
+                if pt.heure_depart is not None:
+                    return Response({"detail": "Départ déjà pointé ce jour-là."}, status=400)
+                pt.heure_depart = tent.cree_le
+                pt.statut_depart = (Pointage.STATUT_NORMAL
+                                    if site is None or heure.time() >= site.heure_depart
+                                    else Pointage.STATUT_ANTICIPE)
+            pt.save()
+            tent.statut = TentativePointage.STATUT_VALIDEE
+        else:
+            tent.statut = TentativePointage.STATUT_REJETEE
+        tent.valideur = request.user
+        tent.save(update_fields=["statut", "valideur"])
+        return Response(TentativeSerializer(tent).data)
+
+    @action(detail=True, methods=["patch"])
+    def valider(self, request, pk=None):
+        return self._appliquer_validation(request, True)
+
+    @action(detail=True, methods=["patch"])
+    def rejeter(self, request, pk=None):
+        return self._appliquer_validation(request, False)
 
 
 # ---------------------------------------------------------------------------

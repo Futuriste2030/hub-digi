@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { Search, ArrowRight } from 'lucide-react';
+import { Search, ArrowRight, Check, Ban } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
-import { ROLES_RH, peutVoir } from '../lib/acces.js';
-import { Card, CardBody } from '../components/ui/Card.jsx';
+import { ROLES_ADMIN, ROLES_RH, peutVoir } from '../lib/acces.js';
+import { Card, CardBody, CardHeader } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import { Label, Input } from '../components/ui/Input.jsx';
-import { listerPointages } from '../api/ressources.js';
+import { listerPointages, listerTentatives, rejeterTentative, validerTentative } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
 
 /* Liste des pointages — RH (SPEC §5.5). Filtre par date + recherche employé. */
@@ -26,6 +26,7 @@ export default function Pointages() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [recherche, setRecherche] = useState('');
   const [pointages, setPointages] = useState([]);
+  const [tentatives, setTentatives] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState('');
 
@@ -34,9 +35,13 @@ export default function Pointages() {
     setChargement(true);
     (async () => {
       try {
-        const pts = await listerPointages({ date });
+        const [pts, tents] = await Promise.all([
+          listerPointages({ date }),
+          listerTentatives({ date }),
+        ]);
         if (!actif) return;
         setPointages(pts);
+        setTentatives(tents.filter((t) => t.statut === 'en_attente'));
         setErreur('');
       } catch (e) {
         if (!actif) return;
@@ -62,6 +67,32 @@ export default function Pointages() {
   const visibles = pointages.filter((p) => q === '' || (p.email ?? '').toLowerCase().includes(q));
   const presents = pointages.filter((p) => p.heure_arrivee).length;
   const retards = pointages.filter((p) => p.statut_arrivee === 'retard').length;
+  const peutAutoriser = peutVoir(session, ROLES_ADMIN);
+
+  const recharger = async () => {
+    try {
+      const [pts, tents] = await Promise.all([listerPointages({ date }), listerTentatives({ date })]);
+      setPointages(pts);
+      setTentatives(tents.filter((t) => t.statut === 'en_attente'));
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Rechargement impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const traiterTentative = async (t, valide) => {
+    try {
+      if (valide) {
+        await validerTentative(t.id);
+        notifier({ type: 'succes', titre: 'Scan autorisé', texte: `${t.email} — pointage ${t.type === 'arrivee' ? 'arrivée' : 'départ'} enregistré.` });
+      } else {
+        await rejeterTentative(t.id);
+        notifier({ type: 'info', titre: 'Scan rejeté', texte: `${t.email} — demande refusée.` });
+      }
+      recharger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Action impossible', texte: messageErreur(e) });
+    }
+  };
 
   return (
     <div>
@@ -76,8 +107,37 @@ export default function Pointages() {
         <Link to="/rh/rapports"><Button variante="secondaire">Rapports mensuels <ArrowRight size={16} aria-hidden="true" /></Button></Link>
       </div>
 
-      <div className="mt-esp-6 grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
-        <div>
+      <Card survol={false} className="mt-esp-4">
+        <CardHeader><h2 className="!text-[18px]">Scans refusés (position) — {tentatives.length} en attente</h2></CardHeader>
+        <CardBody className="flex flex-col gap-esp-3">
+          {tentatives.length === 0 ? (
+            <p className="font-courant text-[15px] text-gris-600">Aucun scan refusé en attente (ex. intempéries, GPS imprécis).</p>
+          ) : tentatives.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-esp-3 rounded-lg bg-gris-100 p-esp-3">
+              <div className="min-w-48 flex-1">
+                <p className="font-courant text-[15px] font-semibold text-gris-900">{t.email}</p>
+                <p className="font-courant text-[15px] text-gris-600 dg-tnum">
+                  {t.type === 'arrivee' ? 'Arrivée' : 'Départ'} · {heureHM(t.cree_le)} · <strong className="font-semibold">{Math.round(t.distance_m)} m</strong> de l entreprise
+                </p>
+              </div>
+              {peutAutoriser ? (
+                <span className="flex gap-esp-2">
+                  <button type="button" onClick={() => traiterTentative(t, true)} aria-label={`Autoriser le scan de ${t.email}`} className="inline-flex min-h-[44px] items-center gap-esp-1 rounded-md bg-succes px-esp-3 font-courant text-[15px] font-semibold text-blanc transition-colors duration-rapide hover:brightness-90">
+                    <Check size={16} aria-hidden="true" /> Valider
+                  </button>
+                  <button type="button" onClick={() => traiterTentative(t, false)} aria-label={`Rejeter le scan de ${t.email}`} className="inline-flex min-h-[44px] items-center gap-esp-1 rounded-md border border-gris-300 px-esp-3 font-courant text-[15px] font-semibold text-erreur transition-colors duration-rapide hover:bg-erreur-fond">
+                    <Ban size={16} aria-hidden="true" />
+                  </button>
+                </span>
+              ) : (
+                <Badge ton="alerte">En attente (Super Admin / Administration)</Badge>
+              )}
+            </div>
+          ))}
+        </CardBody>
+      </Card>
+
+      <div className="mt-esp-6 grid grid-cols-1 gap-esp-4 sm:grid-cols-2">        <div>
           <Label htmlFor="pt-date">Jour</Label>
           <div className="mt-esp-2"><Input id="pt-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         </div>
