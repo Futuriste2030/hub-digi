@@ -290,9 +290,10 @@ Génération:
 <script src="https://hub.digicom.ml/static/tracker.js" data-key="digi_pub_xxx"></script>
 ```
 
-`tracker.js` (vanilla, ~3 Ko):
-- [x] Auto-capture `window.onerror` + `unhandledrejection`: message, stack (tronquée), page URL, userAgent, viewport
-- [x] Widget manuel "Signaler un bug": bouton flottant, description + email optionnel
+`tracker.js` (vanilla, ~3 Ko, **aucun widget visible** — capture 100 % automatique) :
+- [x] Auto-capture `window.onerror` + `unhandledrejection` : message, stack (tronquée), page URL, userAgent, viewport
+- [x] Auto-capture ressources en échec (phase capture : script/CSS/image/chunk introuvable), avec tag + URL fautive
+- [x] **Gravité auto** côté script : `haute` = site partiellement cassé (chunk/script/CSS en échec, `failed to fetch`, erreur de chargement dynamique, MIME), `moyenne` = le reste ; repli backend `moyenne` si gravité absente/invalide ; la Dév requalifie dans le HUB
 - [x] POST `POST /api/v1/bugs/report/` {key, message, stack, url, meta, gravite?} avec throttle `bugs` (30/min) ; clé invalide -> 403
 
 Backend `bugtracker`:
