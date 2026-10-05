@@ -564,11 +564,13 @@ export default function FicheClient() {
   const [onglet, setOnglet] = useState('apercu');
   const [client, setClient] = useState(null);
   const [introuvable, setIntrouvable] = useState(false);
+  const [erreurChargement, setErreurChargement] = useState('');
   const [compte, setCompte] = useState(null);
   const [mdpAcces, setMdpAcces] = useState('');
   const [envoiAcces, setEnvoiAcces] = useState(false);
 
   const charger = async () => {
+    setErreurChargement('');
     try {
       const ov = await overviewClient(id);
       setClient(adapterOverview(ov));
@@ -581,7 +583,10 @@ export default function FicheClient() {
       }
     } catch (e) {
       if (e.response?.status === 404) setIntrouvable(true);
-      else notifier({ type: 'info', titre: 'Chargement impossible', texte: messageErreur(e) });
+      else {
+        setErreurChargement(messageErreur(e, 'Chargement impossible.'));
+        notifier({ type: 'info', titre: 'Chargement impossible', texte: messageErreur(e) });
+      }
     }
   };
 
@@ -692,7 +697,14 @@ export default function FicheClient() {
         <Link to="/clients" className="inline-flex min-h-[44px] items-center gap-esp-1 font-courant text-[15px] font-semibold text-digi-texte">
           <ArrowLeft size={16} aria-hidden="true" /> Clients
         </Link>
-        <p className="mt-esp-4 rounded-lg bg-gris-0 p-esp-6 text-center font-courant text-[15px] text-gris-600" role="status">Chargement de la fiche…</p>
+        {erreurChargement ? (
+          <div className="mt-esp-4 rounded-lg bg-gris-0 p-esp-6 text-center">
+            <p className="font-courant text-[15px] text-erreur" role="alert">{erreurChargement}</p>
+            <Button taille="sm" className="mt-esp-3" onClick={charger}>Réessayer</Button>
+          </div>
+        ) : (
+          <p className="mt-esp-4 rounded-lg bg-gris-0 p-esp-6 text-center font-courant text-[15px] text-gris-600" role="status">Chargement de la fiche…</p>
+        )}
       </div>
     );
   }

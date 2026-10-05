@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
 import Toasts from '../Toasts.jsx';
+import GardeErreur from '../GardeErreur.jsx';
 import ChargementPage from '../ChargementPage.jsx';
 import { useAuth, useSession } from '../../store/auth.js';
 import { chargerEntreprise } from '../../data/parametres.js';
@@ -95,7 +96,9 @@ export default function AppLayout() {
         />
         <main className="mx-auto w-full max-w-grille flex-1 px-esp-5 py-esp-6">
           <div key={localisation.pathname} className="dg-entree">
-            <Outlet context={{ query, setQuery, notifier, session }} />
+            <GardeErreur key={localisation.pathname}>
+              <Outlet context={{ query, setQuery, notifier, session }} />
+            </GardeErreur>
           </div>
         </main>
         <footer className="bg-marine-footer">
