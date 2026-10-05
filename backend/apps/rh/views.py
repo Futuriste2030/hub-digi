@@ -119,6 +119,9 @@ class CandidatureWebhookView(APIView):
 
 QR_TTL_S = 120  # QR dynamique : régénéré toutes les ~60 s côté front, valide 120 s
 QR_SALT = "hub-pointage"
+# Marge de sortie : l'écran + les scans restent possibles jusqu'à 17h30
+# (départ scanné après 17h00 = normal, pas de retard le soir).
+MARGE_SORTIE_MIN = 30
 ROLES_RH_TOUS = ("super_admin", "admin", "chef_rh", "membre_rh")
 
 
@@ -176,8 +179,9 @@ class PointageStatutView(APIView):
         employe = _employeur(request.user)
         if employe is None:
             return Response({"doit_pointer": False, "motif": "Aucune fiche employé liée."})
-        # Plage stricte 08h00–17h00 (minute 17h00 incluse).
-        fin = (datetime.combine(maintenant.date(), site.heure_depart) + timedelta(minutes=1)).time()
+        # Plage 08h00–17h00 + marge de sortie 30 min (départ scannable jusqu'à 17h30).
+        fin = (datetime.combine(maintenant.date(), site.heure_depart)
+               + timedelta(minutes=MARGE_SORTIE_MIN)).time()
         if not (site.heure_arrivee <= maintenant.time() < fin):
             return Response({"doit_pointer": False, "motif": "Hors horaires (08h00–17h00).",
                              "heure_serveur": maintenant.strftime("%H:%M")})
@@ -252,9 +256,10 @@ class PointageScanView(APIView):
         if distance > site.rayon_m:
             return Response({"detail": f"Hors zone entreprise ({int(distance)} m, limite {site.rayon_m} m)."},
                             status=403)
-        # 3. Horaires serveur 08h00–17h00.
+        # 3. Horaires serveur 08h00–17h00 + marge de sortie 30 min.
         maintenant = timezone.localtime()
-        fin = (datetime.combine(maintenant.date(), site.heure_depart) + timedelta(minutes=1)).time()
+        fin = (datetime.combine(maintenant.date(), site.heure_depart)
+               + timedelta(minutes=MARGE_SORTIE_MIN)).time()
         if not (site.heure_arrivee <= maintenant.time() < fin):
             return Response({"detail": "Hors horaires de pointage (08h00–17h00)."}, status=400)
         type_attendu, _pt = _type_attendu(employe, site, maintenant)
