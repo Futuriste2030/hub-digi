@@ -291,6 +291,7 @@ Génération:
 ```
 
 `tracker.js` (vanilla, ~3 Ko, **aucun widget visible** — capture 100 % automatique) :
+// Fichier servi en cache long (/static/ immutable) : à chaque MAJ, bumper `?v=N` dans les snippets collés.
 - [x] Auto-capture `window.onerror` + `unhandledrejection` : message, stack (tronquée), page URL, userAgent, viewport
 - [x] Auto-capture ressources en échec (phase capture : script/CSS/image/chunk introuvable), avec tag + URL fautive
 - [x] **Gravité auto** côté script : `haute` = site partiellement cassé (chunk/script/CSS en échec, `failed to fetch`, erreur de chargement dynamique, MIME), `moyenne` = le reste ; repli backend `moyenne` si gravité absente/invalide ; la Dév requalifie dans le HUB
