@@ -1,10 +1,12 @@
 # HUB DIGI - Digi Com & Technologies
 ## Cahier des spécifications - Référence développement
 
-**Version:** 1.2 - 02/10/2026 (push web + biométrie, déploiement Docker hub.digicom.ml :8002)
+**Version:** 1.3 - 05/10/2026 (client interne sans espace + pointage QR RH)
+**v1.2 - 02/10/2026 (push web + biométrie, déploiement Docker hub.digicom.ml :8002)**
 **v1.1 - 30/09/2026** (veille de mise en ligne sur `hub.digicom.ml`)
 **v1.0 - 10/09/2026 :** socle initial.
 **MAJ 15/09/2026 :** portail client `/espace/:slug/:code` ; 2FA TOTP + QR Profil ; chat temps différé + pastille tickets + cloche `/notifications/` ; reset accès client depuis la fiche (manuel).
+**MAJ 05/10/2026 :** client interne `est_interne` (Digi Com elle-même gérée dans le hub : aucun compte `role=client`, aucun `/espace`, login + portail refusés côté backend, case à cocher + détection auto « digicom » dans `/clients/nouveau`, badge Interne liste/fiche) ; pointage RH par QR dynamique post-login (fenêtre 08h00–17h00 heure serveur, géofencing 150 m, retard après 08h15, rapports mensuels auto + employé du mois + primes).
 **MAJ 30/09/2026 :** module Fournisseurs/Achats (fiches + BDC/BDL/factures ACHAT/paiements + reçus PDF, sélecteur Non payée/Acompte/Payée — c'est Digi Com qui paie, pas de lien de paiement) ; références serveur séquentielles (`references.py` + `CompteurReference` : `BDC/BDL/ACHAT/RECU-F-SLUG-AAAA-NNNN`) ; Décharges Secrétariat (scan compressé serveur JPEG 1600px q70) ; courriers : mention « sortant » retirée du document, cachet Secrétariat dédié (`cachet_secretariat`, signature manuscrite après impression) ; tous les modèles visibles dans `/admin/` (traces en lecture seule) ; notifs bugs (cloche Chef Dév + Super Admin, + admin et mail `dev@` si critique, `gravite` transmissible) ; footer = statut API réel (ping `/settings/entreprise/`) ; domaine unique `hub.digicom.ml` (front + API + tracker) ; `.env` backend prod (SMTP système, tokens) ; SMTP par identité : champs réglables dans `/admin/` mais envoi via compte unique `.env` (connexion dynamique SPEC §8 non implémentée, `smtp_password` en clair — fernet non implémenté).
 **Stack imposée:** Frontend `React JS` + Backend `Django DRF` + `SQLite` ( abandon PostgreSQL : choix projet, `db.sqlite3`)
 **Dossier:** `HUB DIGI/`
@@ -172,7 +174,17 @@ Statuts: `Planifiée -> PV en rédaction -> Clôturée`.
 - [x] Fiches employés liées à `User`, contrats de travail, documents
 - [x] Congés/absences (workflow backend — voir détail ci-dessous)
 - [x] Recrutement: offres gérées côté site vitrine (webhook -> HUB, voir WEBHOOK-CARRIERE.md), HUB statue : Reçue -> Entretien -> Retenue/Rejetée
+- [x] Pointage QR dynamique (05/10/2026, app `rh` : `SitePointage`, `QRToken`, `Pointage`, `Prime`) — voir détail ci-dessous
 - [ ] Évaluations annuelles, trombinoscope
+
+**Pointage QR (horaires verrouillés 08h00–17h00, heure serveur `Africa/Bamako`) :**
+
+1. [x] Login (+ 2FA si active) -> `GET /rh/pointage/statut/` : si un pointage est dû **et** heure serveur dans [08h00, 17h00] -> écran `/pointage` (« Scannez avec votre appareil mobile » + QR dynamique + icône caméra en bas). Hors plage -> login normal, aucun écran.
+2. [x] Desktop affiche le QR dynamique (`POST /rh/pointage/qr/` : payload signé HMAC `TimestampSigner`, TTL 120 s, usage unique via `QRToken`, renouvelé toutes les 45 s). Le mobile (même compte) vise le QR via la caméra (`html5-qrcode`) -> GPS du mobile + `POST /rh/pointage/scan/`.
+3. [x] Vérifications serveur : signature + expiry + anti-rejeu (nonce brûlé) + appartenance employé + distance haversine ≤ `rayon_m` (**150 m** des coordonnées entreprise saisies dans `SitePointage`) + plage 08h00–17h00. Type auto : `arrivee` (retard après 08h00 + 15 min = **08h15**) puis `depart` dès 12h00 (anticipé avant 17h00). Un pointage/jour/employé.
+4. [x] Liste RH `/rh/pointage` (+ entrée sidebar « Pointer » `/pointage` pour tous les internes, ex. départ 17h00) ; tous modèles visibles `/admin/` (pointages/QR en lecture seule).
+5. [x] Rapport mensuel auto `GET /rh/pointage/rapport/?mois=` (présents, retards, départs anticipés, absences vs jours ouvrés lun–ven, heures, score /100 = présence 40 + ponctualité 30 + heures 20 + assiduité 10) + PDF `rapport/pdf/` (charte marine).
+6. [x] Employé du mois auto (meilleur score, départage : retards puis heures) + `Prime` créée (montant `SitePointage.prime_montant`, défaut 25 000 F) `validee=False` -> `PATCH /rh/primes/:id/valider/` (chef_rh/admin/super_admin). Page `/rh/rapports`.
 
 **Workflow Congés (backend Django, Celery + mails) :**
 Statuts: `en_attente -> valide | refuse` (+ `annule` par le demandeur tant que non validé).
@@ -317,7 +329,7 @@ Sécurité/V1 scope:
 Department(id, nom, slug)
 Poste(id, department FK, titre, niveau: chef/membre)
 User(id, email, password, role, department FK null, poste FK null, client FK null si role=client, is_active)
-Client(id, nom_societe, slug, code, contact, email, phone, adresse, statut)
+Client(id, nom_societe, slug, code, contact, email, phone, adresse, statut, est_interne)
 Project(id, client FK, titre, type, statut, deadline, progression%, repo_url, tracker_key)
 ProjectTrackerKey(id, project FK, public_key, allowed_origins)
 Task(id, project FK, titre, statut, assigné FK User, temps_passe)
@@ -337,6 +349,10 @@ TicketApproval(id, ticket FK, demandeur, valideur, decision, commentaire)
 Contract(id, client FK ou employé, type, fichier, date_fin, statut)
 Decharge(id, reference DCH-AAAA-NNNN, provenance, objet, montant, date_recue, image compressée, poids_ko)
 Leave(id, employé, du, au, statut, valideur)
+SitePointage(id, nom, latitude, longitude, rayon_m=150, heure_arrivee=08:00, heure_depart=17:00, tolerance_retard_min=15, prime_montant=25000, actif)
+QRToken(id, employe FK, nonce unique, expire_le, utilise)
+Pointage(id, employe FK, date unique/employe, heure_arrivee, statut_arrivee, heure_depart, statut_depart, lat/lng, distance_m)
+Prime(id, employe FK, mois AAAA-MM unique/employe, montant, motif, validee)
 Candidature(id, offre_reference, offre_titre, nom, email, source site/manuelle, statut)
 EmailIdentity(id, department FK unique, from_address, smtp_* (connexion dynamique NON branchée))
 SentMail(id, identity FK, to, subject, client FK null, ...)
@@ -357,7 +373,7 @@ GET/POST /api/v1/auth/login/ refresh/ me/ + otp/ (setup/confirm/verify/disable/s
 /api/v1/com/campaigns/ calendar/ medias/ communiques/
 /api/v1/finance/quotes/ (:id/valider/ :id/rejeter/) invoices/ (:id/pdf/ :id/payer/ :id/envoyer/) receipts/ (:id/pdf/) expenses/ paie/ (:id/ajouter_ligne/, lignes, cloturer, cachet)
 /api/v1/fournisseurs/ :id/overview/ + fournisseurs-factures/ (valider/payer/pdf) + fournisseurs-paiements/ (pdf) + fournisseurs-commandes/ (valider/envoyer/convertir/pdf) + fournisseurs-livraisons/ (valider/pdf)
-/api/v1/rh/employees/ leaves/ leaves/:id/validate/ recruitments/ + candidatures/ (webhook public X-Hub-Token, throttle)
+/api/v1/rh/employees/ leaves/ leaves/:id/validate/ recruitments/ + candidatures/ (webhook public X-Hub-Token, throttle) + pointage/statut/ pointage/qr/ pointage/scan/ pointages/ pointage/rapport/ (+ /pdf/) primes/ (:id/valider/)
 /api/v1/juridique/contracts/ (:id/pdf/) disputes/
 /api/v1/tickets/ (:id/qualify/ :id/request-approval/ :id/approve/ :id/reply/ :id/messages/ :id/approvals/ :id/clore/ :id/rouvrir/ :id/rejeter/) approvals/
 /api/v1/secretariat/courriers/ reunions/ (:id/decider/, decisions/:id/convertir/) decharges/

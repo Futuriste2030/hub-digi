@@ -18,7 +18,7 @@ class ClientViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = ClientSerializer
     permission_classes = [IsAuthenticated]
-    filterset_fields = ["statut", "slug", "code"]
+    filterset_fields = ["statut", "slug", "code", "est_interne"]
     search_fields = ["nom_societe", "contact", "email"]
     ordering = ["nom_societe"]
 

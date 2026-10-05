@@ -116,6 +116,7 @@ function adapterOverview(ov) {
     slug: c.slug,
     code: c.code,
     societe: c.nom_societe,
+    est_interne: !!c.est_interne,
     contact: c.contact || '—',
     email: c.email || '',
     phone: c.phone || '—',
@@ -201,6 +202,13 @@ function OngletApercu({ client, compte, mdpAcces, onResetMdp, onCopier, onEnvoye
       </Card>
       <Card survol={false}>
         <CardHeader><TitreCarte Icone={KeyRound}>Accès espace client</TitreCarte></CardHeader>
+        {client.est_interne ? (
+          <CardBody>
+            <p className="font-courant text-[15px] text-gris-600">
+              Client interne (Digi Com) : géré dans le hub uniquement — aucun compte ni espace client.
+            </p>
+          </CardBody>
+        ) : (
         <CardBody className="flex flex-col gap-esp-2 font-courant text-[15px] text-gris-700">
           <p className="flex items-center justify-between gap-esp-2">
             <span className="text-gris-600">Espace</span>
@@ -241,6 +249,7 @@ function OngletApercu({ client, compte, mdpAcces, onResetMdp, onCopier, onEnvoye
           )}
           <p className="dg-legende">Seul « Envoyer par mail » transmet au client. La régénération reste à l écran.</p>
         </CardBody>
+        )}
       </Card>
     </div>
   );
@@ -593,6 +602,10 @@ export default function FicheClient() {
      Envoyer transmet TOUJOURS tous les identifiants affichés (anti double-clic). */
 
   const resetMdp = async () => {
+    if (client?.est_interne) {
+      notifier({ type: 'info', titre: 'Client interne', texte: 'Aucun compte espace client pour un client interne.' });
+      return;
+    }
     const mdp = genererMdp();
     try {
       if (compte) {
@@ -625,6 +638,10 @@ export default function FicheClient() {
   };
 
   const envoyerAcces = async () => {
+    if (client?.est_interne) {
+      notifier({ type: 'info', titre: 'Client interne', texte: 'Aucun accès espace client pour un client interne.' });
+      return;
+    }
     if (envoiAcces) return;
     let username = compte?.username;
     let mdp = mdpAcces;
@@ -691,7 +708,8 @@ export default function FicheClient() {
           <h1 className="mt-esp-2">{client.societe}</h1>
           <div className="mt-esp-2 flex flex-wrap items-center gap-esp-2">
             <Badge ton={client.tonStatut}>{client.statut}</Badge>
-            {client.slug && client.code && (
+            {client.est_interne && <Badge ton="info">Interne — sans espace client</Badge>}
+            {!client.est_interne && client.slug && client.code && (
               <button
                 type="button"
                 onClick={async () => {
@@ -715,7 +733,7 @@ export default function FicheClient() {
             <Send size={20} aria-hidden="true" /> Écrire au client
           </Button>
         )}
-        {peutEcrire && (
+        {peutEcrire && !client.est_interne && (
           <Link to={urlEspace(client)} title="Prévisualiser le portail tel que ce client le voit (Administration)" className="inline-flex min-h-[44px] items-center gap-esp-1 rounded-md border border-digi px-esp-5 font-titrage text-[15px] font-bold uppercase leading-none tracking-[0.06em] text-digi transition-all duration-standard hover:bg-digi-voile">
             <MonitorSmartphone size={20} aria-hidden="true" /> Voir son espace client
           </Link>

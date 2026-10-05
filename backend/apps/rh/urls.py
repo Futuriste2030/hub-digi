@@ -1,7 +1,9 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .views import CandidatureWebhookView, EmployeeViewSet, LeaveViewSet
+from .views import (CandidatureWebhookView, EmployeeViewSet, LeaveViewSet, PointageScanView,
+                    PointageStatutView, PointageViewSet, PrimeViewSet, QRChallengeView,
+                    RapportMensuelView, RapportPdfView)
 from .models import Candidature
 from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -35,5 +37,14 @@ router = DefaultRouter()
 router.register("rh/employees", EmployeeViewSet, basename="employee")
 router.register("rh/leaves", LeaveViewSet, basename="leave")
 router.register("rh/recruitments", CandidatureViewSet, basename="candidature")
+router.register("rh/pointages", PointageViewSet, basename="pointage")
+router.register("rh/primes", PrimeViewSet, basename="prime")
 
-urlpatterns = [path("rh/candidatures/", CandidatureWebhookView.as_view(), name="candidature-webhook")] + router.urls
+urlpatterns = [
+    path("rh/candidatures/", CandidatureWebhookView.as_view(), name="candidature-webhook"),
+    path("rh/pointage/statut/", PointageStatutView.as_view(), name="pointage-statut"),
+    path("rh/pointage/qr/", QRChallengeView.as_view(), name="pointage-qr"),
+    path("rh/pointage/scan/", PointageScanView.as_view(), name="pointage-scan"),
+    path("rh/pointage/rapport/", RapportMensuelView.as_view(), name="pointage-rapport"),
+    path("rh/pointage/rapport/pdf/", RapportPdfView.as_view(), name="pointage-rapport-pdf"),
+] + router.urls

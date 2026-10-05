@@ -11,5 +11,6 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = ["id", "nom_societe", "slug", "code", "contact", "email", "phone", "adresse", "statut",
+                  "est_interne",
                   "projets_count", "tickets_ouverts", "factures_impayees", "cree_le", "maj_le"]
         read_only_fields = ["id", "cree_le", "maj_le"]

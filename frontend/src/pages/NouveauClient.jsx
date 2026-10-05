@@ -28,6 +28,7 @@ export default function NouveauClient() {
     adresse: '',
     statut: 'prospect',
     notes: '',
+    est_interne: false,
   });
   const [erreurs, setErreurs] = useState({});
   const [envoi, setEnvoi] = useState(false);
@@ -54,7 +55,16 @@ export default function NouveauClient() {
   const champ = (k) => ({
     value: form[k],
     onChange: (e) => {
-      setForm((f) => ({ ...f, [k]: e.target.value }));
+      const v = e.target.value;
+      setForm((f) => {
+        const Maj = { ...f, [k]: v };
+        /* Détection auto : Digi Com elle-même = cliente interne, sans espace client. */
+        if (k === 'societe') {
+          const norm = String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+          if (norm.includes('digicom')) Maj.est_interne = true;
+        }
+        return Maj;
+      });
       setErreurs((prev) => ({ ...prev, [k]: '' }));
     },
   });
@@ -80,7 +90,14 @@ export default function NouveauClient() {
         phone: form.phone.trim(),
         adresse: form.adresse.trim(),
         statut: form.statut,
+        est_interne: form.est_interne,
       });
+      if (form.est_interne) {
+        /* Client interne (Digi Com) : géré dans le hub, aucun compte espace client. */
+        notifier({ type: 'succes', titre: 'Client interne créé', texte: `${cree.nom_societe} — sans espace client, fiche 360° ouverte.` });
+        naviguer(`/clients/${cree.id}`);
+        return;
+      }
       try {
         await creerCompteClient({ clientId: cree.id, email: form.email.trim(), username: acces.username, password: acces.mdp });
         notifier({ type: 'succes', titre: 'Client créé', texte: `${cree.nom_societe} — compte espace client actif, fiche 360° ouverte.` });
@@ -160,6 +177,19 @@ export default function NouveauClient() {
               <Label htmlFor="nc-adresse">Adresse</Label>
               <div className="mt-esp-2"><Input id="nc-adresse" {...champ('adresse')} placeholder="Quartier, ville, pays" /></div>
             </div>
+            <label htmlFor="nc-interne" className="flex min-h-[44px] cursor-pointer items-start gap-esp-3 rounded-md border border-gris-300 bg-gris-100 p-esp-3">
+              <input
+                id="nc-interne"
+                type="checkbox"
+                checked={form.est_interne}
+                onChange={(e) => setForm((f) => ({ ...f, est_interne: e.target.checked }))}
+                className="mt-1 h-5 w-5 shrink-0 accent-[#0a2a5e]"
+              />
+              <span className="font-courant text-[15px] text-gris-700">
+                <strong className="font-semibold text-gris-900">Client interne (Digi Com)</strong>
+                <br />Géré dans le hub uniquement — aucun compte ni espace client ne sera créé.
+              </span>
+            </label>
           </CardBody>
         </Card>
 
@@ -199,6 +229,15 @@ export default function NouveauClient() {
           <Button type="submit" disabled={envoi}>{envoi ? 'Création…' : 'Créer le client'}</Button>
         </div>
 
+        {form.est_interne ? (
+          <Card survol={false} className="lg:col-span-2">
+            <CardBody>
+              <p className="font-courant text-[15px] text-gris-600">
+                Client interne : aucun accès espace client ne sera créé. La fiche 360° reste disponible pour la gestion (projets, factures, tickets).
+              </p>
+            </CardBody>
+          </Card>
+        ) : (
         <Card survol={false} className="lg:col-span-2">
           <CardHeader>
             <span className="flex items-center gap-esp-3">
@@ -249,6 +288,7 @@ export default function NouveauClient() {
             </div>
           </CardBody>
         </Card>
+        )}
       </form>
     </div>
   );

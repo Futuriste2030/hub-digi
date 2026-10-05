@@ -48,6 +48,9 @@ const Reunions = lazy(() => import('./pages/Reunions.jsx'));
 const Employes = lazy(() => import('./pages/Employes.jsx'));
 const Conges = lazy(() => import('./pages/Conges.jsx'));
 const Recrutement = lazy(() => import('./pages/Recrutement.jsx'));
+const Pointage = lazy(() => import('./pages/Pointage.jsx'));
+const Pointages = lazy(() => import('./pages/Pointages.jsx'));
+const Rapports = lazy(() => import('./pages/Rapports.jsx'));
 const Tickets = lazy(() => import('./pages/Tickets.jsx'));
 const Profil = lazy(() => import('./pages/Profil.jsx'));
 const Chat = lazy(() => import('./pages/Chat.jsx'));
@@ -107,6 +110,9 @@ export default function App() {
             <Route path="rh/employes" element={<RequireRole roles={ROLES_RH}><Employes /></RequireRole>} />
             <Route path="rh/conges" element={<RequireRole roles={INTERNES}><Conges /></RequireRole>} />
             <Route path="rh/recrutement" element={<RequireRole roles={ROLES_RH}><Recrutement /></RequireRole>} />
+            <Route path="rh/pointage" element={<RequireRole roles={ROLES_RH}><Pointages /></RequireRole>} />
+            <Route path="rh/rapports" element={<RequireRole roles={ROLES_RH}><Rapports /></RequireRole>} />
+            <Route path="pointage" element={<RequireRole roles={INTERNES}><Pointage /></RequireRole>} />
             <Route path="parametres" element={<RequireRole roles={['super_admin']}><Parametres /></RequireRole>} />
             <Route path="mails" element={<RequireRole roles={INTERNES}><Mails /></RequireRole>} />
             <Route path="chat" element={<RequireRole roles={INTERNES}><Chat /></RequireRole>} />

@@ -119,7 +119,7 @@ export default function Clients() {
                   <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{c.projets_count ?? 0}</td>
                   <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{c.factures_impayees ?? 0}</td>
                   <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700 dg-tnum">{c.tickets_ouverts ?? 0}</td>
-                  <td className="px-esp-3 py-esp-3"><Badge ton={STATUT_TON[c.statut] ?? 'neutre'}>{STATUT_LABEL[c.statut] ?? c.statut}</Badge></td>
+                  <td className="px-esp-3 py-esp-3"><Badge ton={STATUT_TON[c.statut] ?? 'neutre'}>{STATUT_LABEL[c.statut] ?? c.statut}</Badge>{c.est_interne && <span className="ml-esp-2"><Badge ton="info">Interne</Badge></span>}</td>
                   <td className="px-esp-3 py-esp-3 text-right">
                     <span className="inline-flex items-center gap-esp-1" onClick={(e) => e.stopPropagation()}>
                       {peutSupprimer && (

@@ -52,6 +52,11 @@ class HubTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise AuthenticationFailed("E-mail ou identifiant incorrect.", code="no_active_account")
         if not user.is_active:
             raise AuthenticationFailed("Compte désactivé.", code="no_active_account")
+        if user.role == "client" and user.client_id:
+            from apps.clients.models import Client
+
+            if Client.objects.filter(pk=user.client_id, est_interne=True).exists():
+                raise AuthenticationFailed("Client interne : aucun espace client.", code="no_active_account")
         self.user = user
         refresh = self.get_token(user)
         data = {"refresh": str(refresh), "access": str(refresh.access_token)}
@@ -237,6 +242,23 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["email", "username", "password", "role", "department", "poste", "client"]
+
+    def validate(self, attrs):
+        from apps.clients.models import Client
+
+        if attrs.get("role") == "client":
+            client = attrs.get("client")
+            if isinstance(client, Client):
+                client_obj = client
+            elif client is not None:
+                client_obj = Client.objects.filter(pk=client).first()
+            else:
+                client_obj = None
+            if client_obj is not None and client_obj.est_interne:
+                raise serializers.ValidationError(
+                    {"client": "Client interne (ex. Digi Com) : aucun compte espace client ne doit être créé."}
+                )
+        return attrs
 
     def create(self, validated_data):
         password = validated_data.pop("password")

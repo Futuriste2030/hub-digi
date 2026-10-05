@@ -39,6 +39,8 @@ class DashboardClientView(APIView):
         client = Client.objects.filter(id=client_id).first()
         if not client:
             return Response({"detail": "Compte client introuvable."}, status=404)
+        if client.est_interne and user.role == "client":
+            return Response({"detail": "Client interne : aucun espace client."}, status=403)
 
         from apps.bugtracker.models import BugReport
         from apps.bugtracker.views import BugReportSerializer

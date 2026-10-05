@@ -13,6 +13,7 @@ import {
   FolderKanban,
   ClipboardList,
   Bug,
+  QrCode,
   Wallet,
   FileText,
   Receipt,
@@ -53,7 +54,8 @@ const SECTIONS = [
   {
     libelle: 'Pilotage',
     Icone: LayoutDashboard,
-    liens: [{ to: '/', libelle: 'Tableau de bord', Icone: LayoutDashboard, fin: true, roles: INTERNES }],
+    liens: [{ to: '/', libelle: 'Tableau de bord', Icone: LayoutDashboard, fin: true, roles: INTERNES },
+      { to: '/pointage', libelle: 'Pointer', Icone: QrCode, roles: INTERNES }],
   },
   {
     libelle: 'Clients',
@@ -99,6 +101,8 @@ const SECTIONS = [
     Icone: HeartHandshake,
     liens: [
       { to: '/rh/employes', libelle: 'Employés', Icone: UserCog, roles: ROLES_RH },
+      { to: '/rh/pointage', libelle: 'Pointage', Icone: QrCode, roles: ROLES_RH },
+      { to: '/rh/rapports', libelle: 'Rapports', Icone: FileText, roles: ROLES_RH },
       { to: '/rh/conges', libelle: 'Congés', Icone: CalendarOff, roles: INTERNES },
       { to: '/rh/recrutement', libelle: 'Recrutement', Icone: UserSearch, roles: ROLES_RH },
     ],

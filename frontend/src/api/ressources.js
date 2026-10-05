@@ -34,6 +34,15 @@ export const validerConge = (id, payload) => patch(`/rh/leaves/${id}/validate/`,
 export const listerCandidatures = (params) => toutLister('/rh/recruitments/', params);
 export const majCandidature = (id, payload) => patch(`/rh/recruitments/${id}/`, payload);
 export const supprimerCandidature = (id) => suppr(`/rh/recruitments/${id}/`);
+/* Pointage QR — SPEC §5.5 (MAJ 05/10/2026) : statut post-login, QR dynamique, scan GPS. */
+export const statutPointage = () => get('/rh/pointage/statut/');
+export const genererQrPointage = () => post('/rh/pointage/qr/', {});
+export const scannerPointage = (payload) => post('/rh/pointage/scan/', payload);
+export const listerPointages = (params) => toutLister('/rh/pointages/', params);
+/* Rapports mensuels + primes — employé du mois auto, validation RH. */
+export const rapportPointage = (mois) => get('/rh/pointage/rapport/', { mois });
+export const listerPrimes = (params) => toutLister('/rh/primes/', params);
+export const validerPrime = (id) => patch(`/rh/primes/${id}/valider/`, {});
 export const listerContrats = (params) => toutLister('/juridique/contracts/', params);
 export const creerContrat = (payload) => post('/juridique/contracts/', payload);
 export const majContrat = (id, payload) => patch(`/juridique/contracts/${id}/`, payload);

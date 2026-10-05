@@ -6,6 +6,7 @@ import { Label, Input, Textarea } from '../components/ui/Input.jsx';
 import Logo from '../components/Logo.jsx';
 import { useAuth, userVersSession } from '../store/auth.js';
 import { listerClients } from '../api/clients.js';
+import { statutPointage } from '../api/ressources.js';
 import { urlEspace, urlTableauDeBord } from '../lib/acces.js';
 import { demanderReset } from '../api/auth.js';
 import { biometrieSupportee, connecterBiometrie, messageBiometrie } from '../lib/biometrie.js';
@@ -190,6 +191,16 @@ export default function Login() {
         naviguer('/espace');
       }
       return;
+    }
+    /* Pointage 08h00–17h00 (heure serveur) : écran QR post-login si un pointage est dû. */
+    try {
+      const st = await statutPointage();
+      if (st?.doit_pointer) {
+        naviguer('/pointage');
+        return;
+      }
+    } catch {
+      /* Pointage indisponible : accueil normal. */
     }
     naviguer(urlTableauDeBord(sess));
   };

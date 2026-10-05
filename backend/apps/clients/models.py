@@ -19,6 +19,11 @@ class Client(models.Model):
     phone = models.CharField(max_length=50, blank=True)
     adresse = models.TextField(blank=True)
     statut = models.CharField(max_length=10, choices=STATUTS, default=STATUT_PROSPECT)
+    est_interne = models.BooleanField(
+        default=False,
+        help_text="Client interne (ex. Digi Com elle-même) : géré dans le hub, "
+                  "sans compte ni espace client (/espace).",
+    )
     cree_le = models.DateTimeField(auto_now_add=True)
     maj_le = models.DateTimeField(auto_now=True)
 
