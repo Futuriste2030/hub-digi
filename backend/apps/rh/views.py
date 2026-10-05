@@ -117,7 +117,7 @@ class CandidatureWebhookView(APIView):
 # l'écran post-login ne s'affiche que dans cette plage.
 # ---------------------------------------------------------------------------
 
-QR_TTL_S = 120  # QR dynamique : régénéré toutes les ~60 s côté front, valide 120 s
+QR_TTL_S = 60  # QR dynamique : renouvelé toutes les 10 s côté front, valide 60 s
 QR_SALT = "hub-pointage"
 # Marge de sortie : l'écran + les scans restent possibles jusqu'à 17h30
 # (départ scanné après 17h00 = normal, pas de retard le soir).
@@ -213,6 +213,9 @@ class QRChallengeView(APIView):
         nonce = secrets.token_hex(16)
         expire_le = timezone.now() + timedelta(seconds=QR_TTL_S)
         QRToken.objects.create(employe=employe, nonce=nonce, expire_le=expire_le)
+        # Nettoie les QR périmés (régénéré toutes les 10 s côté front).
+        QRToken.objects.filter(employe=employe, utilise=False,
+                               expire_le__lt=timezone.now()).delete()
         QRToken.objects.filter(expire_le__lt=timezone.now() - timedelta(days=1)).delete()
         payload = signing.TimestampSigner(salt=QR_SALT).sign(f"{employe.id}:{nonce}")
         return Response({"qr": payload, "expire_le": expire_le, "type_attendu": type_attendu},

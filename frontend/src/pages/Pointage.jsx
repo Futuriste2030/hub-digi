@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-import { Camera, Clock, MapPin, QrCode, RefreshCw, CircleCheck, ArrowRight } from 'lucide-react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { Camera, Clock, MapPin, QrCode, CircleCheck, ArrowRight } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { Html5Qrcode } from 'html5-qrcode';
 import Button from '../components/ui/Button.jsx';
@@ -70,10 +70,10 @@ export default function Pointage() {
     return () => { actif = false; };
   }, [chargerQr]);
 
-  /* QR dynamique : renouvelé toutes les 45 s (TTL serveur 120 s). */
+  /* QR dynamique : renouvelé toutes les 10 s (TTL serveur 60 s). */
   useEffect(() => {
     if (!statut?.doit_pointer || resultat) return;
-    const t = setInterval(chargerQr, 45000);
+    const t = setInterval(chargerQr, 10000);
     return () => clearInterval(t);
   }, [statut, resultat, chargerQr]);
 
@@ -201,14 +201,7 @@ export default function Pointage() {
           ) : (
             <p className="font-courant text-[15px] text-gris-600" role="status">Génération du QR…</p>
           )}
-          <p className="dg-legende flex items-center gap-esp-1"><QrCode size={14} aria-hidden="true" /> QR renouvelé automatiquement (toutes les 45 s)</p>
-          <button
-            type="button"
-            onClick={chargerQr}
-            className="inline-flex min-h-[44px] items-center gap-esp-2 rounded-md px-esp-3 font-courant text-[15px] font-semibold text-digi-texte hover:bg-digi-voile"
-          >
-            <RefreshCw size={16} aria-hidden="true" /> Renouveler maintenant
-          </button>
+          <p className="dg-legende flex items-center gap-esp-1"><QrCode size={14} aria-hidden="true" /> QR renouvelé automatiquement (toutes les 10 s)</p>
         </CardBody>
       </Card>
 
@@ -237,12 +230,6 @@ export default function Pointage() {
           {scanEnCours && <p className="font-courant text-[15px] text-gris-600" role="status">Vérification GPS et enregistrement…</p>}
         </CardBody>
       </Card>
-
-      <p className="mt-esp-4 text-center">
-        <Link to={urlTableauDeBord(session)} className="inline-flex min-h-[44px] items-center font-courant text-[15px] font-semibold text-digi-texte">
-          Continuer sans pointer
-        </Link>
-      </p>
     </div>
   );
 }
