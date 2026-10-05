@@ -147,6 +147,9 @@ CORS_ALLOWED_ORIGINS = [
     for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5199,http://127.0.0.1:5199").split(",")
     if o.strip()
 ]
+# Tracker.js : collé sur le site vitrine et tout sous-domaine digicom.ml
+# (endpoint public /bugs/report/ à clé, sans cookies) — indépendant du .env.
+CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://([a-z0-9-]+\.)*digicom\.ml$"]
 CORS_ALLOW_CREDENTIALS = True
 
 # --- DRF ---
