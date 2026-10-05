@@ -36,10 +36,19 @@ urlpatterns = [
 
 def _spa_index(request, chemin=""):
     """Fallback SPA React : toute route non API/admin/static/media -> index.html du build Vite."""
+    # Asset buildé manquant (vieux hash gardé en cache après redéploiement) :
+    # 404 net plutôt que index.html — sinon le navigateur reçoit du text/html
+    # pour du JS/CSS et bloque tout (MIME strict).
+    if chemin.startswith(("assets/", "logo/", "entete/")):
+        raise Http404("Asset frontend inconnu (rebuild : rechargez la page).")
     index = settings.BASE_DIR / "frontend_dist" / "index.html"
     if not index.exists():
         raise Http404("Build frontend absent (frontend_dist/index.html).")
-    return FileResponse(open(index, "rb"), content_type="text/html")
+    resp = FileResponse(open(index, "rb"), content_type="text/html")
+    # Point d'entrée : jamais en cache, sinon un vieil index.html référence
+    # des chunks qui n'existent plus après chaque build (hash Vite neufs).
+    resp["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
 
 
 # /media/ toujours servi par Django : en prod le volume Docker est invisible
