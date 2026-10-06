@@ -168,6 +168,26 @@ class JiraDevTest(TestCase):
         tache.refresh_from_db()
         self.assertEqual(tache.statut, "review")
 
+    def test_recherche_projets_navigation_et_client(self):
+        self.auth(self.membre)
+        r = self.api.get("/api/v1/search/?q=projets")
+        self.assertEqual(r.status_code, 200)
+        nav = next((g for g in r.data["groupes"] if g["type"] == "navigation"), None)
+        self.assertIsNotNone(nav)
+        self.assertTrue(any(x["url"] == "/projets" for x in nav["resultats"]))
+        # Nom du client -> projet trouvé.
+        r = self.api.get("/api/v1/search/?q=Client%20Test")
+        types = [g["type"] for g in r.data["groupes"]]
+        self.assertIn("projet", types)
+
+    def test_recherche_navigation_filtree_par_role(self):
+        self.auth(self.membre)
+        r = self.api.get("/api/v1/search/?q=facture")
+        self.assertEqual(r.status_code, 200)
+        nav = next((g for g in r.data["groupes"] if g["type"] == "navigation"), None)
+        urls = [x["url"] for x in (nav["resultats"] if nav else [])]
+        self.assertNotIn("/factures", urls)
+
     def test_recherche_membre_dev_sans_facture(self):
         self.auth(self.membre)
         tache = Task.objects.create(project=self.project, titre="Recherche xyz")

@@ -65,6 +65,13 @@ const TITRES = {
 
 const initiales = (email) => String(email ?? '').split(/[@.]/).filter(Boolean).slice(0, 2).map((m) => m[0]).join('').toUpperCase() || '?';
 
+/* Libellés FR des groupes de recherche globale. */
+const LIBELLES_GROUPES = {
+  navigation: 'Pages', tache: 'Tâches', bug: 'Bugs', projet: 'Projets',
+  client: 'Clients', ticket: 'Tickets', devis: 'Devis', facture: 'Factures',
+  courrier: 'Courriers',
+};
+
 const ilYa = (iso) => {
   const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (min < 1) return "À l'instant";
@@ -265,7 +272,7 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
             <div role="listbox" aria-label="Résultats de recherche" className="absolute inset-x-0 top-[calc(100%+8px)] z-50 max-h-96 overflow-y-auto rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4">
               {resultats.map((g) => (
                 <div key={g.type}>
-                  <p className="px-esp-3 pb-esp-1 pt-esp-2 font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">{g.type}</p>
+                  <p className="px-esp-3 pb-esp-1 pt-esp-2 font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">{LIBELLES_GROUPES[g.type] ?? g.type}</p>
                   {g.resultats.map((r) => (
                     <button
                       key={`${g.type}-${r.id}`}

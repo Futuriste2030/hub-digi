@@ -15,6 +15,74 @@ def _interne(user):
     return getattr(user, "role", None) != "client"
 
 
+def _norme(s):
+    import unicodedata
+
+    return "".join(c for c in unicodedata.normalize("NFKD", str(s).lower())
+                   if not unicodedata.combining(c))
+
+
+# Raccourcis de navigation : taper « projets », « factures », « congés »…
+# propose la page, même sans objet correspondant (filtrés par rôle).
+NAVIGATION = [
+    ({"tableau de bord", "dashboard", "pilotage"}, "Tableau de bord", "/dashboard", "*"),
+    ({"clients", "client", "prospects"}, "Clients", "/clients", "*"),
+    ({"projets", "projet"}, "Projets", "/projets", "dev"),
+    ({"taches", "tâches", "kanban"}, "Tâches Kanban", "/dev/taches", "dev"),
+    ({"backlog", "sprints", "sprint"}, "Backlog & Sprints", "/dev/backlog", "dev"),
+    ({"bugs", "bug", "tracker"}, "Bugs", "/dev/bugs", "dev"),
+    ({"calendrier", "éditorial", "editorial"}, "Calendrier éditorial", "/com/calendrier", "com"),
+    ({"campagnes", "campagne"}, "Campagnes", "/com/campagnes", "com"),
+    ({"medias", "médias", "bibliotheque"}, "Médias", "/com/medias", "com"),
+    ({"tickets", "ticket", "support"}, "Tickets", "/tickets", "*"),
+    ({"factures", "facture", "impayes"}, "Factures", "/factures", "finance"),
+    ({"devis"}, "Devis", "/finance/devis", "finance"),
+    ({"recus", "reçus", "recu"}, "Reçus", "/finance/recus", "finance"),
+    ({"depenses", "dépenses"}, "Dépenses", "/finance/depenses", "finance"),
+    ({"fournisseurs", "achats"}, "Fournisseurs", "/finance/fournisseurs", "finance"),
+    ({"paie", "salaires"}, "Paie", "/finance/paie", "finance"),
+    ({"contrats", "contrat"}, "Contrats", "/juridique/contrats", "juridique"),
+    ({"litiges", "litige"}, "Litiges", "/juridique/litiges", "juridique"),
+    ({"courriers", "courrier"}, "Courriers", "/secretariat/courriers", "secretariat"),
+    ({"decharges", "décharges"}, "Décharges", "/secretariat/decharges", "secretariat"),
+    ({"reunions", "réunions", "pv"}, "Réunions", "/secretariat/reunions", "secretariat"),
+    ({"employes", "employés"}, "Employés", "/rh/employes", "rh"),
+    ({"conges", "congés", "absences"}, "Congés", "/rh/conges", "*"),
+    ({"recrutement", "candidatures", "carriere"}, "Recrutement", "/rh/recrutement", "rh"),
+    ({"pointage", "pointer", "qr"}, "Pointer", "/pointage", "*"),
+    ({"mails", "mail", "email"}, "E-mails", "/mails", "*"),
+    ({"chat", "messages"}, "Chat interne", "/chat", "*"),
+    ({"profil", "compte"}, "Mon profil", "/profil", "*"),
+    ({"parametres", "paramètres", "utilisateurs"}, "Paramètres", "/parametres", "super"),
+]
+
+_PERIMETRE = {
+    "*": None,  # tous internes (client déjà exclu)
+    "dev": {"super_admin", "chef_dev", "membre_dev"},
+    "com": {"super_admin", "chef_com", "membre_com"},
+    "finance": {"super_admin", "chef_finance", "membre_finance"},
+    "juridique": {"super_admin", "chef_juridique", "membre_juridique"},
+    "secretariat": {"super_admin", "admin"},
+    "rh": {"super_admin", "admin", "chef_rh", "membre_rh"},
+    "super": {"super_admin"},
+}
+
+
+def _navigations(q, role):
+    nq = _norme(q)
+    trouvees = []
+    for mots, titre, url, perimetre in NAVIGATION:
+        roles = _PERIMETRE[perimetre]
+        if roles is not None and role not in roles:
+            continue
+        if any(nq in _norme(m) or _norme(m) in nq for m in mots):
+            trouvees.append({"id": url, "type": "navigation", "titre": titre,
+                             "reference": "", "url": url})
+        if len(trouvees) >= 8:
+            break
+    return trouvees
+
+
 class RechercheGlobaleView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -27,6 +95,10 @@ class RechercheGlobaleView(APIView):
             return Response({"groupes": []})
         role = getattr(user, "role", None)
         groupes = []
+
+        # Pages (toujours en premier : « projets » → la page Projets).
+        for nav in _navigations(q, role):
+            groupes.append(("navigation", nav))
 
         def peut(*roles):
             return role in roles
@@ -50,11 +122,14 @@ class RechercheGlobaleView(APIView):
                 groupes.append(("bug", b))
             for b in BugReport.objects.filter(titre__icontains=q).exclude(numero__icontains=q)[:5]:
                 groupes.append(("bug", b))
-        # Projets — dev + super_admin.
+        # Projets — dev + super_admin (titre ou nom du client).
         if peut("super_admin", "chef_dev", "membre_dev"):
+            from django.db.models import Q
+
             from apps.projects_dev.models import Project
 
-            for p in Project.objects.select_related("client").filter(titre__icontains=q)[:8]:
+            for p in Project.objects.select_related("client").filter(
+                    Q(titre__icontains=q) | Q(client__nom_societe__icontains=q))[:8]:
                 groupes.append(("projet", p))
         # Clients — tous internes.
         if _interne(user):
@@ -89,7 +164,9 @@ class RechercheGlobaleView(APIView):
 
         par_type = {}
         for type_, obj in groupes:
-            par_type.setdefault(type_, []).append(_fiche(type_, obj))
+            # Entrées navigation : déjà des fiches prêtes.
+            fiche = obj if isinstance(obj, dict) else _fiche(type_, obj)
+            par_type.setdefault(type_, []).append(fiche)
         return Response({"groupes": [{"type": k, "resultats": v[:8]} for k, v in par_type.items()]})
 
 
