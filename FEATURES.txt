@@ -391,6 +391,14 @@ Uniquement si projet Dev type=site_web | app_web.
   statut). Bouton "Convertir en tache".
 - Notif a chaque bug : in-app (cloche) Chef Dev + Super Admin, + Administration
   et mail dev@ si critique/gravite haute.
+- Alerte mail systematique au responsable (toutes gravites) : BUG_ALERT_EMAIL
+  (defaut abdoulaye208.mac@gmail.com, reglable via backend/.env), jamais
+  bloquant (fail_silently). Couvre le cas hors-ligne : le mail attend dans
+  la boite, contrairement a la cloche.
+- Push web avec TTL 7 jours : le service push conserve le message si l'appareil
+  est hors-ligne (navigateur ferme) et le livre a la reconnexion. Frontend :
+  ecouteur `online` dans la Topbar -> rechargement aussitot des notifs + toast
+  « Connexion retablie ». Cartes Dépôt/Tracker responsive (break-all, wrap).
 - V1 : erreurs JS + feedback manuel. V2 prevue : source-maps, screenshots, perf.
 - Secu : cle publique exposable, allowed_origins stockee par projet (controle
   origine non enforced - a durcir). Mention consentement a ajouter cote site

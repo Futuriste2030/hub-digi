@@ -263,7 +263,7 @@ export default function ProjetDetail() {
                 <Button taille="sm" onClick={sauverRepo}><Check size={16} aria-hidden="true" /></Button>
               </span>
             ) : (
-              <p className="flex items-center gap-esp-2 font-mono text-[13px] text-gris-700"><GitBranch size={16} aria-hidden="true" className="shrink-0 text-digi" />{projet.repo_url || '—'}</p>
+              <p className="flex min-w-0 items-center gap-esp-2 font-mono text-[13px] text-gris-700"><GitBranch size={16} aria-hidden="true" className="shrink-0 text-digi" /><span className="min-w-0 break-all">{projet.repo_url || '—'}</span></p>
             )}
           </CardBody>
         </Card>
@@ -302,8 +302,8 @@ export default function ProjetDetail() {
           <CardBody>
             {cle ? (
               <>
-                <p className="font-mono text-[13px] text-gris-700">Clé <span className="font-semibold text-gris-900">{cle.public_key}</span></p>
-                <pre className="mt-esp-2 overflow-x-auto rounded-md bg-marine-profond p-esp-3 font-mono text-[13px] text-digi-brume">{snippet(cle.public_key)}</pre>
+                <p className="min-w-0 break-all font-mono text-[13px] text-gris-700">Clé <span className="font-semibold text-gris-900">{cle.public_key}</span></p>
+                <pre className="mt-esp-2 min-w-0 whitespace-pre-wrap break-all rounded-md bg-marine-profond p-esp-3 font-mono text-[13px] text-digi-brume">{snippet(cle.public_key)}</pre>
                 <button type="button" onClick={() => copier(snippet(cle.public_key), 'Snippet tracker copié. Collez-le avant la balise de fermeture body.')} className="mt-esp-2 inline-flex min-h-[44px] items-center gap-esp-2 font-courant text-[15px] font-semibold text-digi-texte">
                   <Copy size={16} aria-hidden="true" /> Copier le snippet
                 </button>

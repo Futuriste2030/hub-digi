@@ -183,6 +183,10 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
+# --- Alerte bugs : e-mail systématique du responsable (en plus cloche + push + mail critique) ---
+# Modifiable sans code via BUG_ALERT_EMAIL dans backend/.env (prod : scp, jamais git).
+BUG_ALERT_EMAIL = os.getenv("BUG_ALERT_EMAIL", "abdoulaye208.mac@gmail.com")
+
 # --- Webhook site vitrine -> HUB (WEBHOOK-CARRIERE.md) ---
 CAREER_WEBHOOK_TOKEN = os.getenv("CAREER_WEBHOOK_TOKEN", "")
 

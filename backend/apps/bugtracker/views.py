@@ -89,6 +89,8 @@ def report_bug(request):
     )
     # Notif in-app (cloche) : Chef Dév + Super Admin à chaque bug,
     # + Administration si critique. Mail si critique (jamais bloquant).
+    # + Alerte mail systématique au responsable (toutes gravités) : couvre le
+    # cas hors-ligne (le mail attend dans la boîte, contrairement à la cloche).
     try:
         roles = ["chef_dev", "super_admin"]
         if bug.gravite == "critique":
@@ -110,6 +112,16 @@ def report_bug(request):
                     f"[CRITIQUE] {titre}", bug.titre,
                     identite.from_address if identite else settings.DEFAULT_FROM_EMAIL,
                     courriels, fail_silently=True)
+        alerte = getattr(settings, "BUG_ALERT_EMAIL", "")
+        if alerte:
+            url_bug = request.data.get("url", "—")
+            send_mail(
+                f"[HUB BUG {bug.gravite}] {bug.numero} — {tracker.project.titre}",
+                f"Bug {bug.numero} ({bug.gravite}) sur « {tracker.project.titre} ».\n\n"
+                f"Titre : {bug.titre}\nPage : {url_bug}\n\n"
+                f"Voir : {settings.FRONTEND_URL}/dev/bugs",
+                settings.DEFAULT_FROM_EMAIL,
+                [alerte], fail_silently=True)
     except Exception:
         pass
     return Response({"numero": bug.numero}, status=201)

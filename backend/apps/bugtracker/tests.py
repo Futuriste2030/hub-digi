@@ -34,7 +34,22 @@ class ReportNotifTests(TestCase):
         notifies = set(Notification.objects.filter(titre__contains=bug.numero)
                        .values_list("destinataire__role", flat=True))
         self.assertEqual(notifies, {"chef_dev", "super_admin"})
-        self.assertEqual(len(mail.outbox), 0)  # pas critique => pas de mail
+        # Pas critique => pas de mail critique, mais alerte systématique au responsable.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(bug.numero, mail.outbox[0].subject)
+
+    def test_alerte_mail_responsable_toutes_gravites(self):
+        from django.conf import settings
+
+        r = self.client.post("/api/v1/bugs/report/", {
+            "key": self.key.public_key, "message": "Petit glitch", "gravite": "basse",
+        }, format="json")
+        self.assertEqual(r.status_code, 201)
+        bug = BugReport.objects.get(numero=r.data["numero"])
+        alerte = [m for m in mail.outbox if settings.BUG_ALERT_EMAIL in m.to]
+        self.assertEqual(len(alerte), 1)
+        self.assertIn(bug.numero, alerte[0].subject)
+        self.assertIn("basse", alerte[0].subject)
 
     def test_critique_notifie_admin_et_mail(self):
         r = self.client.post("/api/v1/bugs/report/", {
@@ -46,8 +61,9 @@ class ReportNotifTests(TestCase):
         notifies = set(Notification.objects.filter(titre__contains=bug.numero)
                        .values_list("destinataire__role", flat=True))
         self.assertEqual(notifies, {"chef_dev", "super_admin", "admin"})
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn(bug.numero, mail.outbox[0].subject)
+        # Mail critique + alerte systématique au responsable.
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertTrue(all(bug.numero in m.subject for m in mail.outbox))
 
     def test_gravite_invalide_repliee(self):
         r = self.client.post("/api/v1/bugs/report/", {

@@ -35,6 +35,9 @@ def envoyer_push_async(notification_id):
                 data=donnees,
                 vapid_private_key=config.cle_privee,
                 vapid_claims={"sub": "mailto:admin@digicom.ml"},
+                # TTL 7 jours : le service push conserve le message si l'appareil est
+                # hors-ligne (navigateur fermé) et le livre à la reconnexion.
+                ttl=7 * 24 * 3600,
             )
             envoyes += 1
         except WebPushException as exc:

@@ -192,8 +192,19 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
       }
       if (e.key === 'Escape') setMenu(null);
     };
+    // Hors-ligne -> en ligne : rattraper aussitôt les notifs manquées
+    // (cloche + chat), même après une longue coupure réseau.
+    const aLaReconnexion = () => {
+      chargerCentre();
+      notifier({ type: 'succes', titre: 'Connexion rétablie', texte: 'Notifications mises à jour.' });
+    };
     window.addEventListener('keydown', clavier);
-    return () => window.removeEventListener('keydown', clavier);
+    window.addEventListener('online', aLaReconnexion);
+    return () => {
+      window.removeEventListener('keydown', clavier);
+      window.removeEventListener('online', aLaReconnexion);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
