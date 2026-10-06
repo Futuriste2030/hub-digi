@@ -358,6 +358,13 @@ Backend reel au 30/09/2026 :
   code metier).
 - Permission : peut envoyer via identite de son dept uniquement. Super Admin
   bypass.
+- Historique filtre par user : chacun ne voit que ses propres envois
+  (SentMail.auteur, renseigne a l'envoi ; NULL = systeme), super_admin voit
+  tout (avec auteur affiche). Page /mails : « Envoyes recents — mes envois ».
+- Copie CC : champ « En copie » avec dropdown des adresses pro des users
+  (hors clients, hors soi-meme, chips + retrait), validees serveur (400 si
+  invalide, doublons fusionnes, destinataire exclu). SentMail.cc stocke,
+  EmailMultiAlternatives envoie reellement en Cc.
 - Table SentMail (from_identity, to, subject, body_html, client/project/
   ticket FK, status, error) -> visible Fiche Client onglet Mails + historique
   client dans /espace.
@@ -447,9 +454,11 @@ previsualise via slug+code.
   numerotation, cachets). Courriers via impression navigateur.
 - Pagination, filtres ?client_id & ?status & ?search partout.
 - Recherche globale (v1.4 Jira §5) : GET /api/v1/search/?q= (2 caracteres min,
-  SQLite icontains, sans moteur externe), taches (ref+titre), bugs, projets,
-  clients, tickets, devis, factures, courriers, 5-8 resultats/entite groupes
-  par type, {id, type, titre, reference, url} uniquement. Permissions = memes
+  SQLite icontains, sans moteur externe), taches (ref+titre), bugs, projets
+  (titre ou nom client), clients, tickets, devis, factures, courriers,
+  5-8 resultats/entite groupes par type, {id, type, titre, reference, url}
+  uniquement. Groupe « Pages » en premier : taper « projets », « factures »,
+  « conges »… propose la page (filtre par role, insensible aux accents). Permissions = memes
   querysets que les modules (membre_dev : aucune facture ; client exclu).
   Frontend : champ Topbar + raccourci Ctrl+K, resultats groupes, clic vers fiche.
 - Docs API auto drf-spectacular /api/docs/.

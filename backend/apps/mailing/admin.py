@@ -16,5 +16,5 @@ class MailTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(SentMail)
 class SentMailAdmin(admin.ModelAdmin):
-    list_display = ("to", "subject", "statut", "cree_le")
+    list_display = ("to", "cc", "auteur", "subject", "statut", "cree_le")
     list_filter = ("statut",)

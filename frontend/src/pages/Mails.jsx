@@ -9,7 +9,7 @@ import { Label, Input, Textarea } from '../components/ui/Input.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { INTERNES, peutVoir, urlEspace } from '../lib/acces.js';
 import {
-  envoyerMail, listerCampagnes, listerMailsEnvoyes, listerTemplatesMail,
+  envoyerMail, listerCampagnes, listerMailsEnvoyes, listerTemplatesMail, listerUsersMini,
 } from '../api/ressources.js';
 import { listerFactures } from '../api/finance.js';
 import { listerReunions, listerTickets } from '../api/tickets.js';
@@ -74,6 +74,10 @@ export default function Mails() {
   const [tickets, setTickets] = useState([]);
   const [campagnes, setCampagnes] = useState([]);
   const [reunions, setReunions] = useState([]);
+  const [usersCc, setUsersCc] = useState([]); // adresses pro pour la dropdown CC.
+  const [enCopie, setEnCopie] = useState([]); // CC sélectionnées.
+  const [choixCopie, setChoixCopie] = useState('');
+  const estSuperAdmin = session?.role === 'super_admin';
 
   const identite = session?.role === 'super_admin'
     ? { departement: 'Administration', adresse: IDENTITES.Administration }
@@ -81,14 +85,17 @@ export default function Mails() {
 
   const charger = async () => {
     try {
-      const [ms, ts, cls, rs] = await Promise.all([
+      const [ms, ts, cls, rs, us] = await Promise.all([
         listerMailsEnvoyes(), listerTemplatesMail(), listerClients(), listerReunions(),
+        listerUsersMini().catch(() => []),
       ]);
       setEnvoyes(ms.slice(0, 20));
       setTemplates(ts.filter((t) => !AUTO_SEULEMENT.has(t.key)));
       const liste = cls.results ?? cls;
       setClients(liste);
       setReunions(rs);
+      // Dropdown CC : adresses pro des users (hors clients, hors soi-même).
+      setUsersCc((us ?? []).filter((u) => u.email && u.email !== session?.email));
     } catch {
       /* historique indisponible, le formulaire reste utilisable */
     }
@@ -209,14 +216,17 @@ export default function Mails() {
     }
     if (envoi) return;
     setEnvoi(true);
+    const ccFinal = choixCopie && !enCopie.includes(choixCopie) ? [...enCopie, choixCopie] : enCopie;
     try {
       await envoyerMail({
-        to: a.trim(), subject: obj.trim(), body_html: `<p>${msg.trim().replace(/\n/g, '<br>')}</p>`,
+        to: a.trim(), cc: ccFinal, subject: obj.trim(), body_html: `<p>${msg.trim().replace(/\n/g, '<br>')}</p>`,
         ...(contexte.client ? { client: Number(contexte.client) } : {}),
       });
       setA('');
+      setEnCopie([]);
+      setChoixCopie('');
       choisirModele('libre');
-      notifier({ type: 'succes', titre: 'E-mail envoyé', texte: `Via ${identite.adresse}.` });
+      notifier({ type: 'succes', titre: 'E-mail envoyé', texte: `Via ${identite.adresse}${ccFinal.length ? ` · Cc ${ccFinal.join(', ')}` : ''}.` });
       charger();
     } catch (err) {
       setErreur(messageErreur(err, 'Envoi impossible.'));
@@ -243,6 +253,7 @@ export default function Mails() {
       <h1 className="mt-esp-2">E-mails</h1>
       <p className="mt-esp-2 max-w-[65ch] font-courant text-[15px] text-gris-600">
         Envoyez un e-mail depuis le hub. L adresse d envoi suit votre département, l historique rejoint la fiche client.
+        Vous ne voyez que vos propres envois{estSuperAdmin ? ' (Super Admin : tout l historique).' : '.'}
       </p>
 
       <div className="mt-esp-5">
@@ -282,6 +293,47 @@ export default function Mails() {
                     <option value="libre">Message libre</option>
                     {templates.map((t) => <option key={t.key} value={t.key}>{t.nom}</option>)}
                   </select>
+                </div>
+
+              <div className="sm:col-span-2">
+                <Label htmlFor="mail-cc">En copie (Cc) — adresses pro des users</Label>
+                <div className="mt-esp-2 flex gap-esp-2">
+                  <select
+                    id="mail-cc"
+                    value={choixCopie}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v && !enCopie.includes(v)) setEnCopie((prev) => [...prev, v]);
+                      setChoixCopie('');
+                    }}
+                    className="h-11 min-h-[44px] flex-1 rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi"
+                  >
+                    <option value="">— Ajouter une copie —</option>
+                    {usersCc.filter((u) => !enCopie.includes(u.email)).map((u) => (
+                      <option key={u.id} value={u.email}>
+                        {u.email}{u.department_nom ? ` · ${u.department_nom}` : ''}{u.poste_titre ? ` — ${u.poste_titre}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {enCopie.length > 0 && (
+                  <div className="mt-esp-2 flex flex-wrap gap-esp-2" aria-label="Destinataires en copie">
+                    {enCopie.map((c) => (
+                      <span key={c} className="inline-flex min-h-[44px] items-center gap-esp-1 rounded-pilule bg-gris-200 px-esp-3 font-courant text-[14px] text-gris-800">
+                        Cc {c}
+                        <button
+                          type="button"
+                          onClick={() => setEnCopie((prev) => prev.filter((x) => x !== c))}
+                          aria-label={`Retirer ${c} de la copie`}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-pilule text-gris-600 hover:text-erreur"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-esp-1 font-courant text-[13px] text-gris-600">Chaque adresse reçoit réellement le mail en copie.</p>
                 </div>
               </div>
 
@@ -339,7 +391,8 @@ export default function Mails() {
                         <Label htmlFor={`ctx-${nom}`}>{nom}</Label>
                         <div className="mt-esp-2">
                           <Input id={`ctx-${nom}`} value={extras[nom] ?? ''} onChange={(e) => setExtras((x) => ({ ...x, [nom]: e.target.value }))} placeholder={`Valeur pour {{ ${nom} }}`} />
-                        </div>
+              </div>
+
                       </div>
                     ))}
                   </div>
@@ -370,7 +423,7 @@ export default function Mails() {
 
         <Card survol={false} className="lg:col-span-2">
           <CardHeader>
-            <h2 className="!text-[18px]">Envoyés récents</h2>
+            <h2 className="!text-[18px]">Envoyés récents{estSuperAdmin ? '' : ' — mes envois'}</h2>
           </CardHeader>
           <CardBody className="flex flex-col gap-esp-3">
             {envoyes.length === 0 && (
@@ -382,8 +435,8 @@ export default function Mails() {
                   <p className="truncate font-courant text-[15px] font-semibold text-gris-900">{m.subject}</p>
                   <Badge ton={m.statut === 'envoye' ? 'succes' : 'erreur'}>{m.statut === 'envoye' ? 'Envoyé' : 'Échec'}</Badge>
                 </div>
-                <p className="mt-esp-1 truncate font-mono text-[13px] text-gris-600">À {m.to}</p>
-                <p className="font-courant text-[13px] text-gris-600">{dateFr(m.cree_le)}</p>
+                <p className="mt-esp-1 truncate font-mono text-[13px] text-gris-600">À {m.to}{m.cc ? ` · Cc ${m.cc}` : ''}</p>
+                <p className="font-courant text-[13px] text-gris-600">{dateFr(m.cree_le)}{estSuperAdmin && m.auteur_email ? ` · par ${m.auteur_email}` : ''}</p>
               </div>
             ))}
           </CardBody>

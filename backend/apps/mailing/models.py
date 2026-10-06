@@ -1,6 +1,5 @@
 """Mailing multi-expéditeurs — SPEC §8 : EmailIdentity par département + MailTemplate + SentMail."""
 
-from django.core.mail import send_mail
 from django.db import models
 
 from apps.core.tasks import envoyer_mail_async
@@ -51,7 +50,12 @@ class SentMail(models.Model):
     STATUTS = [(STATUT_ENVOYE, "Envoyé"), (STATUT_ECHEC, "Échec")]
 
     identity = models.ForeignKey(EmailIdentity, null=True, on_delete=models.SET_NULL, related_name="mails")
+    auteur = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="mails_envoyes",
+        help_text="Expéditeur connecté (filtrage par user ; super_admin voit tout). NULL = envoi système.",
+    )
     to = models.EmailField()
+    cc = models.TextField(blank=True, help_text="Copie : e-mails pro séparés par des virgules.")
     subject = models.CharField(max_length=255)
     body_html = models.TextField(blank=True)
     client = models.ForeignKey("clients.Client", null=True, blank=True, on_delete=models.SET_NULL)
@@ -69,7 +73,9 @@ class SentMail(models.Model):
         Tout mail part avec le layout charte (comme le reçu) : si le corps n'est
         pas déjà un document HTML complet, on l'enveloppe (texte brut -> échappé).
         Anti-spam : version texte brut systématique (les mails 100 % HTML sont
-        pénalisés) + From avec nom affiché « Digi Com & Technologies »."""
+        pénalisés) + From avec nom affiché « Digi Com & Technologies ».
+        Les adresses en copie (cc) reçoivent réellement le mail (champ Cc)."""
+        from django.core.mail import EmailMultiAlternatives
         from django.utils.html import strip_tags
 
         from apps.mailing.layout import ACCENT_DEFAUT, mise_en_page
@@ -86,13 +92,26 @@ class SentMail(models.Model):
         expediteur = f"Digi Com & Technologies <{adresse}>" if adresse else None
         texte_brut = strip_tags(corps).replace("&nbsp;", " ").strip() or self.subject
         try:
-            send_mail(self.subject, texte_brut, expediteur,
-                      [self.to], html_message=self.body_html, fail_silently=False)
+            message = EmailMultiAlternatives(
+                self.subject, texte_brut, expediteur, [self.to], cc=self.liste_cc)
+            message.attach_alternative(self.body_html, "text/html")
+            message.send(fail_silently=False)
             self.statut = self.STATUT_ENVOYE
         except Exception as exc:
             self.statut = self.STATUT_ECHEC
             self.erreur = str(exc)
         self.save()
+
+    @property
+    def liste_cc(self):
+        """Adresses en copie, normalisées et dédupliquées (jamais le destinataire)."""
+        vues, propres = set(), []
+        for brut in (self.cc or "").replace(";", ",").split(","):
+            adresse = brut.strip().lower()
+            if adresse and "@" in adresse and adresse != (self.to or "").strip().lower() and adresse not in vues:
+                vues.add(adresse)
+                propres.append(adresse)
+        return propres
 
     def expedier_async(self):
         envoyer_mail_async.delay(self.id)
