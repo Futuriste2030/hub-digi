@@ -103,24 +103,22 @@ class RechercheGlobaleView(APIView):
         def peut(*roles):
             return role in roles
 
-        # Tâches (référence, titre) — dev + super_admin.
+        from django.db.models import Q
+
+        # Tâches (référence, titre, e-mail assigné) — dev + super_admin.
         if peut("super_admin", "chef_dev", "membre_dev"):
             from apps.projects_dev.models import Task
 
             qs = Task.objects.select_related("project")
-            if role == "membre_dev":
-                pass  # même scope lecture que le module (tous projets internes).
-            for t in qs.filter(reference__icontains=q)[:3]:
+            for t in qs.filter(Q(reference__icontains=q) | Q(titre__icontains=q)
+                              | Q(assigne__email__icontains=q))[:8]:
                 groupes.append(("tache", t))
-            for t in qs.filter(titre__icontains=q).exclude(reference__icontains=q)[:5]:
-                groupes.append(("tache", t))
-        # Bugs — dev + super_admin.
+        # Bugs (numéro, titre, description) — dev + super_admin.
         if peut("super_admin", "chef_dev", "membre_dev"):
             from apps.bugtracker.models import BugReport
 
-            for b in BugReport.objects.filter(numero__icontains=q)[:3]:
-                groupes.append(("bug", b))
-            for b in BugReport.objects.filter(titre__icontains=q).exclude(numero__icontains=q)[:5]:
+            for b in BugReport.objects.filter(Q(numero__icontains=q) | Q(titre__icontains=q)
+                                              | Q(description__icontains=q))[:8]:
                 groupes.append(("bug", b))
         # Projets — dev + super_admin (titre ou nom du client).
         if peut("super_admin", "chef_dev", "membre_dev"):
@@ -131,36 +129,67 @@ class RechercheGlobaleView(APIView):
             for p in Project.objects.select_related("client").filter(
                     Q(titre__icontains=q) | Q(client__nom_societe__icontains=q))[:8]:
                 groupes.append(("projet", p))
-        # Clients — tous internes.
+        # Clients (société, contact, e-mail, téléphone) — tous internes.
         if _interne(user):
             from apps.clients.models import Client
 
-            for c in Client.objects.filter(nom_societe__icontains=q)[:8]:
+            for c in Client.objects.filter(
+                    Q(nom_societe__icontains=q) | Q(contact__icontains=q)
+                    | Q(email__icontains=q) | Q(phone__icontains=q))[:8]:
                 groupes.append(("client", c))
-        # Tickets — tous internes.
+        # Tickets (numéro, sujet, message, catégorie) — tous internes.
         if _interne(user):
             from apps.secretariat_tickets.models import Ticket
 
-            for t in Ticket.objects.filter(numero__icontains=q)[:3]:
+            for t in Ticket.objects.filter(
+                    Q(numero__icontains=q) | Q(sujet__icontains=q)
+                    | Q(message__icontains=q) | Q(categorie__icontains=q))[:8]:
                 groupes.append(("ticket", t))
-            for t in Ticket.objects.filter(sujet__icontains=q).exclude(numero__icontains=q)[:5]:
-                groupes.append(("ticket", t))
-        # Devis / factures — finance + super_admin uniquement (membre_dev = rien).
+        # Devis (numéro, objet, client) / factures (numéro, client) — finance + super_admin.
         if peut("super_admin", "chef_finance", "membre_finance"):
             from apps.finance.models import Devis, Invoice
 
-            for d in Devis.objects.filter(numero__icontains=q)[:4]:
+            for d in Devis.objects.filter(
+                    Q(numero__icontains=q) | Q(objet__icontains=q)
+                    | Q(client__nom_societe__icontains=q))[:8]:
                 groupes.append(("devis", d))
-            for f in Invoice.objects.filter(numero__icontains=q)[:4]:
+            for f in Invoice.objects.filter(
+                    Q(numero__icontains=q) | Q(client__nom_societe__icontains=q))[:8]:
                 groupes.append(("facture", f))
-        # Courriers — secrétariat (super_admin, admin).
+        # Courriers (référence, objet, expéditeur, destinataire) — secrétariat.
         if peut("super_admin", "admin"):
             from apps.secretariat_tickets.models import Courrier
 
-            for c in Courrier.objects.filter(reference__icontains=q)[:4]:
+            for c in Courrier.objects.filter(
+                    Q(reference__icontains=q) | Q(objet__icontains=q)
+                    | Q(expediteur__icontains=q) | Q(destinataire__icontains=q))[:8]:
                 groupes.append(("courrier", c))
-            for c in Courrier.objects.filter(objet__icontains=q).exclude(reference__icontains=q)[:4]:
-                groupes.append(("courrier", c))
+        # Campagnes (titre, objectifs, client) — com + super_admin.
+        if peut("super_admin", "chef_com", "membre_com"):
+            from apps.com.models import Campaign
+
+            for c in Campaign.objects.filter(
+                    Q(titre__icontains=q) | Q(objectifs__icontains=q)
+                    | Q(client__nom_societe__icontains=q))[:8]:
+                groupes.append(("campagne", c))
+        # Employés (nom, e-mail, fonction) — RH + super_admin.
+        if peut("super_admin", "admin", "chef_rh", "membre_rh"):
+            from apps.rh.models import Employee
+
+            for e in Employee.objects.select_related("user").filter(
+                    Q(user__first_name__icontains=q) | Q(user__last_name__icontains=q)
+                    | Q(user__email__icontains=q) | Q(fonction__icontains=q))[:8]:
+                groupes.append(("employe", e))
+        # Congés (motif) — RH voit tout, chacun voit les siens.
+        if _interne(user):
+            from apps.rh.models import Leave
+
+            if peut("super_admin", "admin", "chef_rh", "membre_rh"):
+                conges = Leave.objects.filter(motif__icontains=q)
+            else:
+                conges = Leave.objects.filter(motif__icontains=q, employe__user=user)
+            for lv in conges.select_related("employe__user")[:8]:
+                groupes.append(("conge", lv))
 
         par_type = {}
         for type_, obj in groupes:
@@ -184,10 +213,21 @@ def _fiche(type_, obj):
         return {"id": obj.id, "type": type_, "titre": getattr(obj, "nom_societe", str(obj)),
                 "reference": "", "url": f"/clients/{obj.id}"}
     if type_ == "ticket":
-        return {"id": obj.id, "type": type_, "titre": getattr(obj, "numero", str(obj)),
+        return {"id": obj.id, "type": type_, "titre": f"{getattr(obj, 'numero', '')} — {getattr(obj, 'sujet', '')}",
                 "reference": getattr(obj, "numero", ""), "url": "/tickets"}
+    if type_ == "campagne":
+        return {"id": obj.id, "type": type_, "titre": obj.titre,
+                "reference": "", "url": "/com/campagnes"}
+    if type_ == "employe":
+        u = getattr(obj, "user", None)
+        nom = f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}".strip() or getattr(u, "email", "")
+        return {"id": obj.id, "type": type_, "titre": f"{nom} · {obj.fonction or ''}".strip(),
+                "reference": "", "url": "/rh/employes"}
+    if type_ == "conge":
+        return {"id": obj.id, "type": type_, "titre": f"Congé {obj.du_jour} → {obj.au_jour} : {obj.motif or ''}",
+                "reference": "", "url": "/rh/conges"}
     if type_ == "devis":
-        return {"id": obj.id, "type": type_, "titre": getattr(obj, "numero", str(obj)),
+        return {"id": obj.id, "type": type_, "titre": f"{getattr(obj, 'numero', '')} — {getattr(obj, 'objet', '')}",
                 "reference": getattr(obj, "numero", ""), "url": "/finance/devis"}
     if type_ == "facture":
         return {"id": obj.id, "type": type_, "titre": getattr(obj, "numero", str(obj)),

@@ -454,11 +454,16 @@ previsualise via slug+code.
   numerotation, cachets). Courriers via impression navigateur.
 - Pagination, filtres ?client_id & ?status & ?search partout.
 - Recherche globale (v1.4 Jira §5) : GET /api/v1/search/?q= (2 caracteres min,
-  SQLite icontains, sans moteur externe), taches (ref+titre), bugs, projets
-  (titre ou nom client), clients, tickets, devis, factures, courriers,
-  5-8 resultats/entite groupes par type, {id, type, titre, reference, url}
-  uniquement. Groupe « Pages » en premier : taper « projets », « factures »,
-  « conges »… propose la page (filtre par role, insensible aux accents). Permissions = memes
+  SQLite icontains, sans moteur externe). Tous les champs utiles : taches
+  (ref/titre/assigne), bugs (numero/titre/description), projets (titre/client),
+  clients (societe/contact/e-mail/tel), tickets (numero/sujet/message/categorie),
+  devis (numero/objet/client), factures (numero/client), courriers
+  (ref/objet/expediteur/destinataire), campagnes (titre/objectifs/client),
+  employes (nom/e-mail/fonction), conges (motif ; RH = tout, chacun = les siens).
+  8 resultats/entite groupes par type, {id, type, titre, reference, url}.
+  Groupe « Pages » en premier : taper « projets », « factures »,
+  « conges »… propose la page (filtre par role, insensible aux accents).
+  Etat vide « Aucun resultat pour … ». Permissions = memes
   querysets que les modules (membre_dev : aucune facture ; client exclu).
   Frontend : champ Topbar + raccourci Ctrl+K, resultats groupes, clic vers fiche.
 - Docs API auto drf-spectacular /api/docs/.

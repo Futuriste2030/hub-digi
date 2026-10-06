@@ -188,6 +188,18 @@ class JiraDevTest(TestCase):
         urls = [x["url"] for x in (nav["resultats"] if nav else [])]
         self.assertNotIn("/factures", urls)
 
+    def test_recherche_tous_champs_cles(self):
+        from apps.secretariat_tickets.models import Ticket
+
+        self.auth(self.membre)
+        Ticket.objects.create(client=self.client_obj, sujet="Sujet test",
+                              message="contenu tres specifique xyz")
+        for q, type_attendu in (("specifique", "ticket"), ("Client Test", "client"),
+                                ("Client Test", "projet")):
+            r = self.api.get("/api/v1/search/?q=%s" % q.replace(" ", "%20"))
+            self.assertEqual(r.status_code, 200)
+            self.assertIn(type_attendu, [g["type"] for g in r.data["groupes"]], q)
+
     def test_recherche_membre_dev_sans_facture(self):
         self.auth(self.membre)
         tache = Task.objects.create(project=self.project, titre="Recherche xyz")

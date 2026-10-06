@@ -69,7 +69,7 @@ const initiales = (email) => String(email ?? '').split(/[@.]/).filter(Boolean).s
 const LIBELLES_GROUPES = {
   navigation: 'Pages', tache: 'Tâches', bug: 'Bugs', projet: 'Projets',
   client: 'Clients', ticket: 'Tickets', devis: 'Devis', facture: 'Factures',
-  courrier: 'Courriers',
+  courrier: 'Courriers', campagne: 'Campagnes', employe: 'Employés', conge: 'Congés',
 };
 
 const ilYa = (iso) => {
@@ -118,8 +118,9 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
   const [users, setUsers] = useState([]);
   const [nouveauAvec, setNouveauAvec] = useState('');
   const [resultats, setResultats] = useState([]);
+  const [rechercheFaite, setRechercheFaite] = useState(false);
   const minuteurRecherche = useRef(null);
-  const zoneRechercheRef = useClickOutside(() => setResultats([]));
+  const zoneRechercheRef = useClickOutside(() => { setResultats([]); setRechercheFaite(false); });
   const nonLuesN = notifs.filter((n) => !n.lue).length;
   const nonLusC = convos.reduce((s, c) => s + (c.non_lus ?? 0), 0);
 
@@ -249,6 +250,7 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
             onChange={(e) => {
               const v = e.target.value;
               setQuery(v);
+              setRechercheFaite(false);
               if (minuteurRecherche.current) clearTimeout(minuteurRecherche.current);
               if (v.trim().length < 2 || session?.role === 'client') { setResultats([]); return; }
               minuteurRecherche.current = setTimeout(async () => {
@@ -257,6 +259,8 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
                   setResultats(r.groupes ?? []);
                 } catch {
                   setResultats([]);
+                } finally {
+                  setRechercheFaite(true);
                 }
               }, 300);
             }}
@@ -268,8 +272,11 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
           <kbd aria-hidden="true" className="absolute right-esp-3 top-1/2 -translate-y-1/2 rounded-sm border border-gris-300 bg-gris-0 px-esp-2 py-0.5 font-mono text-[13px] text-gris-600">
             ⌘K
           </kbd>
-          {resultats.length > 0 && (
+          {(resultats.length > 0 || rechercheFaite) && (
             <div role="listbox" aria-label="Résultats de recherche" className="absolute inset-x-0 top-[calc(100%+8px)] z-50 max-h-96 overflow-y-auto rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4">
+              {resultats.length === 0 && (
+                <p className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-600">Aucun résultat pour « {query.trim()} ».</p>
+              )}
               {resultats.map((g) => (
                 <div key={g.type}>
                   <p className="px-esp-3 pb-esp-1 pt-esp-2 font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">{LIBELLES_GROUPES[g.type] ?? g.type}</p>
@@ -279,7 +286,7 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
                       type="button"
                       role="option"
                       aria-selected="false"
-                      onClick={() => { setResultats([]); naviguer(r.url); }}
+                      onClick={() => { setResultats([]); setRechercheFaite(false); naviguer(r.url); }}
                       className="flex w-full items-center gap-esp-2 rounded-md p-esp-3 text-left hover:bg-gris-100"
                     >
                       <span className="min-w-0 flex-1 truncate font-courant text-[15px] text-gris-900">{r.titre}</span>
