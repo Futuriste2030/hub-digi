@@ -25,6 +25,7 @@ const NouveauClient = lazy(() => import('./pages/NouveauClient.jsx'));
 const Projets = lazy(() => import('./pages/Projets.jsx'));
 const ProjetDetail = lazy(() => import('./pages/ProjetDetail.jsx'));
 const Taches = lazy(() => import('./pages/Taches.jsx'));
+const Backlog = lazy(() => import('./pages/Backlog.jsx'));
 const Bugs = lazy(() => import('./pages/Bugs.jsx'));
 const Calendrier = lazy(() => import('./pages/Calendrier.jsx'));
 const Campagnes = lazy(() => import('./pages/Campagnes.jsx'));
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="projets" element={<RequireRole roles={ROLES_DEV}><Projets /></RequireRole>} />
             <Route path="projets/:id" element={<RequireRole roles={ROLES_DEV}><ProjetDetail /></RequireRole>} />
             <Route path="dev/taches" element={<RequireRole roles={ROLES_DEV}><Taches /></RequireRole>} />
+            <Route path="dev/backlog" element={<RequireRole roles={ROLES_DEV}><Backlog /></RequireRole>} />
             <Route path="dev/bugs" element={<RequireRole roles={ROLES_DEV}><Bugs /></RequireRole>} />
             <Route path="com/calendrier" element={<RequireRole roles={ROLES_COM}><Calendrier /></RequireRole>} />
             <Route path="com/campagnes" element={<RequireRole roles={ROLES_COM}><Campagnes /></RequireRole>} />

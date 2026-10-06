@@ -1,0 +1,492 @@
+================================================================================
+HUB DIGI - Digi Com & Technologies
+Document explicatif des fonctionnalites (FEATURES)
+Version : 1.4 - 06/10/2026 (module Dev aligne Jira : estimation/priorite,
+sprints/backlog, burndown/velocite, webhook GitHub, recherche globale)
+Domaine prod : https://hub.digicom.ml
+Stack : Frontend React 19 + Vite / Backend Django 5 + DRF / SQLite / JWT
+================================================================================
+
+1. PRESENTATION GENERALE
+-----------------------
+HUB DIGI est le hub interne multi-departements de Digi Com & Technologies
++ un portail client externe.
+
+- Le HUB (agents internes) : https://hub.digicom.ml/
+  API : https://hub.digicom.ml/api/v1/
+  Admin Django : https://hub.digicom.ml/admin/
+  Doc API OpenAPI : https://hub.digicom.ml/api/docs/
+- Le Portail Client : https://hub.digicom.ml/espace/:slug/:code
+  Exemple : /espace/orange-mali/4821 (slug societe + code a 4 chiffres).
+  Route historique /espace-client redirige vers /espace.
+- Le Tracker JS : https://hub.digicom.ml/static/tracker.js
+  Script a coller sur les sites clients pour remonter les bugs JS
+  automatiquement.
+
+Objectifs :
+- Un Super Admin cree les comptes et assigne Departement + Poste.
+- Chaque departement a son espace et ses outils metier.
+- Le Super Admin voit tout.
+- Le client suit ses projets, factures, recus, tickets, bugs sans appeler.
+- Factures / recus / BDC / BDL / rapports PDF generes automatiquement.
+- Traçabilite via AuditLog (visible /admin/ en lecture seule).
+
+2. ROLES ET PERMISSIONS
+----------------------
+Roles geres (JWT contient role, department_id, poste_id) :
+
+- super_admin : acces total. Cree/desactive les users, assigne Dept+Poste,
+  configure les mails, voit les logs, valide tout. Seul a /parametres.
+  Peut previsualiser n'importe quel portail client via slug+code.
+- admin (Administration / Secretariat) : transverse hors technique/finance.
+  Dashboard global, clients, conges (validation), boite tickets,
+  courriers, reunions/PV, e-mails. PAS d'acces aux onglets internes
+  Dev / Com / Finance / Juridique.
+- chef_com / membre_com : campagnes, calendrier editorial, medias clients.
+- chef_dev / membre_dev : projets, taches Kanban, bugs, deploiements.
+  Seul le chef a les droits d'edition sensibles (crayons reserves).
+- chef_rh / membre_rh : employes, conges, recrutement, pointage QR.
+- chef_juridique / membre_juridique : contrats, litiges, echeances.
+- chef_finance / membre_finance : devis, factures, recus, depenses, paie,
+  fournisseurs/achats.
+- client : ne voit que ses propres donnees (filtre where client_id = me).
+  Accede uniquement a /espace/:slug/:code. Ne voit pas le dashboard interne.
+
+Regles :
+- Poste toujours rattache a un Department (ex: Dev -> Chef Projet, Dev Front).
+- Chef valide/assigne, Membre execute.
+- Frontend : sidebar filtree (src/lib/acces.js) + routes gardees (RequireRole).
+  C'est un garde-fou, pas la securite reelle.
+- Backend : permissions DRF par role + filtres automatiques. Le backend ne
+  fait jamais confiance au frontend.
+
+Client interne (est_interne, MAJ 05/10/2026) :
+- Digi Com elle-meme est geree comme client dans le hub (case a cocher
+  + detection auto "digicom" dans /clients/nouveau, badge Interne liste/fiche).
+- Aucun compte role=client cree pour elle, aucun /espace, login + portail
+  refuses cote backend.
+
+3. CONCEPT CENTRAL : FICHE CLIENT 360°
+--------------------------------------
+Route front : /clients/:id
+Route API : /api/v1/clients/:id/overview/
+
+Tout objet metier a une FK client. Les vues departements filtrent par
+?client_id=. La fiche regroupe en onglets :
+
+- Apercu : infos societe, contacts, statut prospect/client, slug + code portail,
+  username/mot de passe generes a la creation (affiches en fiche, transmis
+  manuellement via template "Bienvenue espace client" + lien /espace/:slug/:code,
+  reset via POST /clients/:id/reset-password/ et /send-access/).
+- Projets Dev : liste projets, % avancement, deadline, bugs ouverts.
+- Com : campagnes liees, calendrier editorial filtre client, assets a valider.
+- Finance : devis, factures, recus PDF, solde impayes, bouton relancer.
+- Juridique : contrats signes, echeances, documents.
+- Tickets & Mails : historique tickets + mails envoyes/recus.
+- Documents : tous fichiers lies.
+
+4. SUPER ADMIN (/admin + /parametres)
+-------------------------------------
+- CRUD users + assignation Dept/Poste + reset password + desactivation
+  (/parametres/utilisateurs).
+- Gestion Departements/Postes.
+- Dashboard KPI : CA, projets en retard, tickets ouverts, effectif, bugs.
+- Config EmailIdentity par departement + cachets/en-tete societe dans
+  /parametres (cachet_finance, cachet_juridique, cachet_secretariat).
+- Journal d'audit visible /admin/ (lecture seule).
+- Tous les modeles metier visibles dans /admin/ (traces en lecture seule).
+- Matrices de permissions documentees (frontend src/data/permissions.js,
+  src/lib/acces.js).
+
+5. ADMINISTRATION / SECRETARIAT (/secretariat)
+----------------------------------------------
+a) Boite tickets entrants : voir section 11 Workflow Tickets.
+
+b) Courriers (/secretariat/courriers) :
+   - Numerotation COUR-AAAA-NNNN.
+   - Workflow : brouillon -> envoye/recu -> traite -> archive.
+   - Papier a en-tete officiel + cachet Secretariat importe en Parametres,
+     sans mention "sortant" sur le document, signature manuscrite apres
+     impression, bouton Imprimer / PDF navigateur.
+
+c) Decharges (/secretariat/decharges) :
+   - Registre DCH-AAAA-NNNN (provenance, objet, montant optionnel,
+     date de reception, commentaire).
+   - Scan uploade compresse cote serveur (JPEG 1600px q70, poids affiche).
+   - Suppression reservee super_admin/admin.
+
+d) Reunions + PV (/secretariat/reunions) :
+   Statuts : Planifiee -> PV en redaction -> Cloturee.
+   - Creation -> convocation auto par mail a chaque participant (date, heure,
+     lieu + ODJ, via admin@digicom.ml) + notif in-app. Toute modif date/lieu/
+     participants renvoie une mise a jour.
+   - Ordre du jour modifiable uniquement au statut Planifiee. Fige des le
+     passage en "PV en redaction".
+   - PV redigeable uniquement en "PV en redaction". Decisions avec responsable
+     + echeance obligatoires.
+   - Decision -> tache Kanban assignee (POST /reunions/:id/decisions/:id/
+     convertir/ {project_id}), responsable repris comme assigne, lien retour.
+   - Cloture -> diffusion auto du PV par mail + verrou total (lecture seule).
+   - Archivage global, validation niveau 1 (conges, factures brouillon,
+     contrats).
+
+6. COMMUNICATION (/com)
+-----------------------
+- Vue par client (onglet Com de la Fiche 360°).
+- Calendrier editorial : date, canal (FB, Insta, TikTok, LinkedIn), statut,
+  client lie (/com + /calendrier + /espace-redaction).
+- Campagnes : budget, objectifs, visuels, stats (/campagnes).
+- Bibliotheque medias par client : fichier ou lien externe 0 octet VPS
+  (/medias).
+- Demandes de validation client (visibles cote portail client, le client
+  valide visuels / laisse commentaire).
+
+7. DEVELOPPEMENT (/projets, /dev/*, /bugs) — v1.4 Jira
+-----------------------------------------
+- Projets : client FK, type (site_web, app_web, app_mobile, autre), statut,
+  deadline, jalons, % auto depuis taches, repo_url, envs prod/staging,
+  notes de deploiement. Onglets detail : Kanban / Sprints / GitHub (+ Backlog).
+- Taches (Jira §1) : reference serveur TASK-AAAA-NNNN (compteur atomique/an,
+  retro-remplie), estimation_points (1,2,3,5,8,13…), estimation_heures,
+  priorite basse|normale|haute|critique (defaut normale), done_at auto
+  (renseigne en done, vide a la reouverture). Temps passe = reel, distinct.
+  Permissions : estimation/priorite/sprint modifiables par chef_dev/super_admin
+  uniquement (403 API + champs desactives pour membre_dev) ; membre_dev deplace
+  et saisit son temps. Filtres ?priorite= ?assigne= ?statut= ?sprint=, tri
+  priorite, recherche reference+titre. Carte Kanban : reference, badge
+  priorite, estimation, compare estime/passe, flag +sprint, section
+  Developpement (liens Git + copier branche feature/TASK-…-slug).
+- Sprints & backlog (Jira §2, /dev/backlog + onglet Sprints) : Sprint (projet,
+  nom, objectif, debut/fin, planifie|actif|termine, points engages/termines
+  figes, demarre/termine_le). Un seul actif/projet (400 sinon). Backlog =
+  taches sans sprint non terminees (tri priorite puis creation). Demarrer fige
+  les points (somme estimations, sinon nb taches) ; terminer fige les points
+  termines et deplace les ouvertes vers sprint_cible ou backlog (ecran de
+  cloture). Ajout en cours de sprint visible (+sprint via sprint_added_at).
+  Kanban : selecteur de sprint (defaut actif) + bandeau nom/objectif/dates/
+  jours restants/progression points.
+- Rapports (Jira §3, calcul a la demande, sans Beat) : GET /sprints/:id/rapport/
+  (serie par jour ouvre lun-ven {date, restant_ideal lineaire, restant_reel via
+  done_at}, totaux engages/termines/taches/ajoutes, temps estime vs passe ;
+  sans estimation = comptage taches) + GET /projets/:id/velocite/?n=6 (N
+  derniers termines + moyenne). Frontend : burndown SVG ideal vs reel,
+  histogramme velocite, carte Pilotage « Sprints actifs » (chef_dev/super_admin).
+  Export PDF ReportLab : non fait (optionnel).
+- GitHub entrant V1 sans OAuth (Jira §4) : convention TASK-/BUG-AAAA-NNNN
+  insensible casse dans commits/PR/branches. Project.github_repo (deduit de
+  repo_url), github_webhook_secret (token_urlsafe 32, jamais renvoye, affiche
+  une fois a la regeneration chef_dev/super_admin), github_auto_statut (defaut
+  False). Modeles LienGit (task ou bug exclusif, commit|pull_request|branche,
+  statut_pr ouverte|fusionnee|fermee) + LivraisonWebhook (idempotence).
+  POST /api/v1/github/webhook/<project_id>/ public throttled : HMAC SHA-256
+  X-Hub-Signature-256 compare_digest (403 sinon), corps ≤ 1 Mo, idempotence
+  X-GitHub-Delivery (200 sans retraiter), depot verifie, ping 200, push/PR
+  traites (autres 202), rattachement meme projet uniquement. Auto (si option) :
+  1re PR ouverte a_faire→en_cours, fusion→review, jamais done ; bugs : liens
+  seuls. Notif in-app chef_dev/super_admin a la fusion (+ AuditLog best-effort).
+  Frontend : onglet GitHub (repo, URL webhook a copier, secret une fois,
+  regenerer, mode d'emploi, interrupteur auto, 20 dernieres livraisons),
+  section Developpement tache/bug, bouton copier branche.
+- Suivi transmis au client (section "Suivi client" dans ProjetDetail) :
+  jalons = grandes etapes de validation convenues (pas les taches Kanban
+  internes), livrables = fichiers finalises remis au client. Visible dans
+  /espace/:slug.
+- Bugs remontes visibles dans l'espace projet (onglet Bugs) + conversion
+  en tache en 1 clic ("Convertir en tache" -> Task liee) + section
+  Developpement (liens Git).
+- Si type site_web/app_web -> PROJECT_KEY (digi_pub_xxx) + snippet tracker
+  hub.digicom.ml/static/tracker.js avec bouton copier (voir section 12).
+
+8. RESSOURCES HUMAINES (/rh)
+----------------------------
+a) Employes (/rh + /employes) :
+   - Fiches employes liees a User, contrats de travail, documents.
+   - Statut actualise (En conge sur la periode si conge valide).
+
+b) Conges / absences (/rh/conges) :
+   Statuts : en_attente -> valide | refuse (+ annule par demandeur tant que
+   non valide).
+   - Tout user connecte a un bouton "Demander un conge" (POST /rh/leaves/
+     {du, au, motif} -> en_attente, solde non decompe, notif + mail a la RH).
+   - RH (chef_rh ou admin/super_admin) accepte ou refuse dans /rh/conges
+     (file en_attente + pastille + toast, PATCH /leaves/:id/validate/
+     {decision, commentaire}, commentaire obligatoire si refus).
+   - Si valide : solde decompe, statut employe actualise, dates visibles
+     des deux cotes (Mon espace -> Mes conges + fiche employe / liste conges).
+   - Si refuse : motif visible cote employe, solde inchange.
+   - Rappel mail J-3 (tache Celery Beat quotidienne, template conge_rappel_j3
+     via rh@digicom.ml + notif in-app). Beat non actif en prod actuelle.
+   - Traçabilite AuditLog (demandeur, valideur, decision, date).
+
+c) Recrutement (/rh/recrutement) :
+   - Offres gerees cote site vitrine -> webhook temps reel vers HUB
+     (voir WEBHOOK-CARRIERE.md) : POST /api/v1/rh/candidatures/ avec header
+     X-Hub-Token, deduplication email+offre -> 200 doublon, sinon 201 Recue.
+   - HUB statue : Recue -> Entretien -> Retenue / Rejetee.
+   - Badge source Site web / Saisie manuelle + toast + pastille RH.
+   - Bouton secours "Importer du site" + commande renvoyer_candidatures
+     (cron 15 min) si webhook en panne.
+
+d) Pointage QR dynamique (/pointage + /rh/pointage + /rh/rapports) :
+   MAJ 05/10/2026. Horaires verrouilles 08h00-17h00 heure serveur Africa/Bamako,
+   geofencing 150 m, retard apres 08h15.
+   - Apres login (+2FA si active), GET /rh/pointage/statut/ : si pointage du
+     et heure serveur dans [08h00, 17h30] -> ecran /pointage ("Scannez avec
+     votre appareil mobile" + QR dynamique + icone camera). Hors plage ou
+     conge valide couvrant le jour -> login normal, aucun ecran.
+   - Desktop affiche QR dynamique (POST /rh/pointage/qr/ : payload signe HMAC,
+     TTL 60 s, usage unique via QRToken, renouvele toutes les 10 s, aucun
+     bouton de contournement). Le mobile (meme compte) vise le QR via camera
+     (html5-qrcode) -> GPS mobile + POST /rh/pointage/scan/.
+   - Verifs serveur : signature + expiry + anti-rejeu (nonce brule) +
+     appartenance employe + distance haversine <= rayon_m (150 m de
+     SitePointage) + plage 08h00-17h30. Type auto : arrivee (retard apres
+     08h15) puis depart des 12h00 (anticipe avant 17h00, normal apres).
+     Un pointage/jour/employe.
+   - Scan refuse pour position -> TentativePointage conservee (employe, jour,
+     type, GPS, distance). Section "Scans refuses" dans /rh/pointage avec
+     Valider / Rejeter (PATCH /rh/tentatives/:id/valider|rejeter/,
+     super_admin/admin, ex. intemperies). Valider cree le pointage (memes
+     regles horaires, GPS dispense).
+   - Rapport mensuel auto GET /rh/pointage/rapport/?mois= (presents, retards,
+     departs anticipes, conges valides exclus des absences et jours dus,
+     absences vs jours ouvres lun-ven, heures, score /100 = presence 40 +
+     ponctualite 30 + heures 20 + assiduite 10) + PDF rapport/pdf/ (charte
+     marine).
+   - Employe du mois auto (meilleur score, departage retards puis heures) +
+     Prime creee (montant SitePointage.prime_montant, defaut 25 000 F,
+     validee=False) -> PATCH /rh/primes/:id/valider/ (chef_rh/admin/
+     super_admin). Page /rh/rapports.
+   - Tous modeles visibles /admin/ (pointages/QR en lecture seule).
+   - Non fait : evaluations annuelles, trombinoscope.
+
+9. JURIDIQUE (/juridique)
+------------------------
+- Contrats (client/employe) : redaction depuis modele, version, signature, PDF.
+  PDF conforme a l'apercu (parseur HTML robuste : h1-h6, listes, citations,
+  gras/italique, ligne cible / date / statut).
+- Signature electronique salariee : signature_employe_nom/le/hash (empreinte
+  contenu scellee), POST /juridique/contracts/:id/signer/ reserve au salarie
+  lie (nom + "Lu et approuve"), GET /juridique/contracts/mes/ + carte
+  "Mes contrats" dans Profil, notif Chef Juridique + Super Admin, badge apercu.
+  Toute modif titre/contenu par le Juridique invalide la signature (a re-signer).
+- Litiges : statut, pieces jointes.
+- Bibliotheque clauses/modeles.
+- A faire : alertes echeances/renouvellements Celery Beat J-30/J-7 (Beat non
+  actif).
+
+10. FINANCE (/finance, /factures, /devis, /recus, /depenses, /paie)
+-----------------------------------------------------------------
+- Devis -> Facture : brouillon -> validee -> envoyee -> payee / partielle /
+  impayee. Devis validables/rejetables cote client (valider convertit en
+  facture + notif admin, rejeter signale refuse + notif admin).
+- Generation PDF auto (ReportLab, charte marine + cachet) + numerotation
+  FACTURE-SLUG-JJ-MM-AAAA-ID, RECU-....
+- Recu auto cree au paiement. Moyens : especes, virement, Mobile Money
+  (champ ref transaction).
+- Depenses par departement, paie employes (fiches + cachet, cloture,
+  lignes, /paie + /fiche-paie).
+- Rapports CA (brut/encaisse/depenses), series mensuelles (/rapports).
+- Envoi mail facture / relance via identite finance@digicom.ml.
+- Non fait : relances auto impayes, export CSV, paiement en ligne
+  (liens pay.digicom.ml en attente API paiement - logique conservee, non
+  branchee).
+
+Module Fournisseurs / Achats (/finance/fournisseurs) - MAJ 30/09/2026 :
+miroir Clients, perimetre Finance. C'est Digi Com qui paie, pas de lien
+de paiement.
+- Fiches Fournisseur + fiche 360° /finance/fournisseurs/:id (onglets
+  Commandes / Livraisons / Factures & Recus, PDF BDC/BDL/facture/recu).
+- Bons de commande BDC-SLUG-AAAA-NNNN (brouillon -> validee -> envoyee, lignes
+  description/quantite/montant).
+- Bons de livraison BDL-SLUG-AAAA-NNNN (2 choix : depuis commande avec reprise
+  auto des restes, ou saisie libre ; validation = imputation quantites ->
+  partiellement_livree / livree).
+- Conversion commande -> facture ACHAT-SLUG-AAAA-NNNN (recue -> validee ->
+  payee / partielle, lien BDC trace).
+- Factures + paiements avec recu RECU-F-SLUG-AAAA-NNNN. Paiement = selecteur
+  Non payee / Acompte / Payee (montant controle <= solde, deduit du solde du).
+- References serveur sequentielles (references.py + CompteurReference,
+  atomique, par annee).
+- Guard ROLES_FINANCE, suppression chef_finance/super_admin bloquee si liens.
+
+11. WORKFLOW TICKETS + SECRETARIAT (avec aval)
+----------------------------------------------
+Endpoints : /api/v1/tickets/
+Statuts : nouveau -> qualifie -> en_attente_aval -> approuve -> repondu ->
+clos (+ rejete). Modeles : Ticket, TicketMessage (interne vs client),
+TicketApproval.
+
+- Client POST ticket depuis /espace (projet FK optionnel, categorie, priorite,
+  message, PJ) -> ref auto TICK-2026-xxxx, statut nouveau.
+- Ticket arrive en nouveau dans Boite Secretariat (/tickets) avec ref
+  projet/client auto.
+- Secretariat qualifie (categorie, priorite, dept assigne dev/com/finance...).
+- Bouton "Demander aval" -> TicketApproval + notif Chef dept.
+- Chef dept approuve / modifie reponse proposee (commentaire interne separe
+  du message client).
+- Secretariat seul clique "Repondre au client" (template mail via identite
+  dept concernee ou admin).
+- Traçabilite : qui a qualifie, qui a donne aval, texte final envoye
+  (messages internes vs client + historique statuts).
+- Pastille tickets + cloche /notifications/.
+- A faire : SLA 24h reponse / 72h resolution + alerte Super Admin + Chef
+  (Beat non actif).
+
+12. MAILING MULTI-EXPEDITEURS (/mails)
+--------------------------------------
+Tout user peut envoyer un mail depuis son espace, avec l'adresse de son
+departement. Page /mails (identite de son dept affichee) + bouton "Envoyer
+mail" dans chaque espace (client/projet/facture/ticket) avec select template
++ apercu.
+
+Identites :
+- Super Admin + Administration -> admin@digicom.ml
+- Communication -> com@digicom.ml
+- Developpement -> dev@digicom.ml
+- Finance -> finance@digicom.ml
+- RH -> rh@digicom.ml
+- Juridique -> juridique@digicom.ml
+
+Backend reel au 30/09/2026 :
+- Modele EmailIdentity (department FK unique, smtp_host/port/user/password,
+  from_address, signature, use_tls) reglable dans /admin/.
+- Connexion dynamique get_connection() NON implementee : tous les envois
+  partent via le compte SMTP unique du .env, seul le from affiche varie.
+  smtp_password en clair (fernet NON implemente).
+- Envoi en Celery (eager en dev = synchrone, jamais en sync request cote
+  code metier).
+- Permission : peut envoyer via identite de son dept uniquement. Super Admin
+  bypass.
+- Table SentMail (from_identity, to, subject, body_html, client/project/
+  ticket FK, status, error) -> visible Fiche Client onglet Mails + historique
+  client dans /espace.
+- Templates par usage editables /admin/ : facture disponible, relance, reponse
+  ticket, validation visuel, bienvenue espace client, reset password,
+  convocation/diffusion reunion, rappel conge.
+- A faire infra : SPF+DKIM+DMARC cote DNS avant prod.
+
+13. BUG TRACKER VIA tracker.js
+------------------------------
+Uniquement si projet Dev type=site_web | app_web.
+- A la creation projet web -> ProjectTrackerKey (public_key=digi_pub_xxx) +
+  snippet affiche avec bouton copier :
+  <script src="https://hub.digicom.ml/static/tracker.js" data-key="digi_pub_xxx"></script>
+  (l'endpoint de report suit le domaine du src, fichier servi en cache long,
+  bumper ?v=N a chaque MAJ).
+- tracker.js (vanilla ~3 Ko, aucun widget visible, capture 100% auto) :
+  window.onerror + unhandledrejection (message, stack tronquee, URL, userAgent,
+  viewport) + ressources en echec en phase capture (script/CSS/image/chunk
+  introuvable, tag + URL fautive).
+- Gravite auto cote script : haute = site partiellement casse (chunk/script/
+  CSS en echec, failed to fetch, erreur chargement dynamique, MIME),
+  moyenne = reste. Repli backend moyenne si gravite absente/invalide.
+  La Dev requalifie dans le HUB.
+- POST /api/v1/bugs/report/ {key, message, stack, url, meta, gravite?} avec
+  throttle bugs (30/min). Cle invalide -> 403.
+- Modele BugReport (numero BUG-YYYY-#### auto, project FK, titre, description,
+  gravite transmissible, statut nouveau/confirme/en_cours/corrige/rejete,
+  assigne, meta_json).
+- Visible dans /dev/projets/:id onglet Bugs + portail client (ses bugs +
+  statut). Bouton "Convertir en tache".
+- Notif a chaque bug : in-app (cloche) Chef Dev + Super Admin, + Administration
+  et mail dev@ si critique/gravite haute.
+- V1 : erreurs JS + feedback manuel. V2 prevue : source-maps, screenshots, perf.
+- Secu : cle publique exposable, allowed_origins stockee par projet (controle
+  origine non enforced - a durcir). Mention consentement a ajouter cote site
+  client.
+
+14. PORTAIL CLIENT (/espace/:slug/:code)
+---------------------------------------
+Guard role=client. Client ne voit que where client_id = me.client_id.
+Un client ouvrant une autre adresse est ramene sur la sienne. super_admin
+previsualise via slug+code.
+
+- Dashboard : projets en cours + deadline + %, factures impayees, tickets
+  ouverts.
+- Mes Projets & Services : jalons, livrables telechargeables, bugs signales
+  (BUG-xxx + statut), suivi redige par l'agence (section Suivi client).
+- Mes devis : Valider (converti en facture + notif admin) / Rejeter (signale
+  refuse + notif admin).
+- Mes Factures/Recus : liste + PDF download.
+- Creer Ticket : choisir projet concerne -> ref auto TICK-2026-xxxx.
+- Valider visuels Com / laisser commentaire projet.
+- Historique mails recus du hub.
+- A faire : bouton Payer / demander proforma (en attente API paiement).
+
+15. FEATURES TRANSVERSALES
+-------------------------
+- Auth JWT + refresh rotation + 2FA TOTP optionnelle (QR Profil) + reset
+  password (lien 24 h) + Biométrie/passkeys (voir ci-dessous).
+- Biométrie / passkeys (02/10/2026, app webauthn, webauthn==3.0.1, additif au
+  mdp) : PasskeyCredential (cle publique seule) + PasskeyChallenge usage unique
+  10 min ; POST /auth/webauthn/register/* (connecte, PLATFORM) et /login/*
+  (public, JWT directs ou 202 OTP si TOTP) ; UI Profil (activer/retirer) +
+  bouton Login "Se connecter avec biométrie", fallback mdp toujours present.
+- Push web (02/10/2026, app push) : signal post_save sur Notification ->
+  tache envoyer_push_async (VAPID auto-genere en base VapidConfig, abonnements
+  PushSubscription, 404/410 purges) ; endpoints /push/vapid-key/, /subscribe/,
+  /test/ ; service worker push-sw.js + activation dans Profil (iPhone : ajout
+  ecran d'accueil requis).
+- Notifications in-app (cloche /notifications/ : tickets + bugs + conges) ;
+  toasts + pastilles. Mails : factures/recus/tickets/reunions/conges via
+  templates. Rappels auto J-3/J+7 et SLA en attente (Beat non actif).
+- Chat temps differe + pastille + Conversations / Messages / lus
+  (/chat, /chat-groupes).
+- Upload fichiers avec validation extension/taille (images 10 Mo, cachets
+  2 Mo) + compression serveur scans decharges.
+- Generation PDF unifiee ReportLab (header Digi Com & Technologies, footer,
+  numerotation, cachets). Courriers via impression navigateur.
+- Pagination, filtres ?client_id & ?status & ?search partout.
+- Recherche globale (v1.4 Jira §5) : GET /api/v1/search/?q= (2 caracteres min,
+  SQLite icontains, sans moteur externe), taches (ref+titre), bugs, projets,
+  clients, tickets, devis, factures, courriers, 5-8 resultats/entite groupes
+  par type, {id, type, titre, reference, url} uniquement. Permissions = memes
+  querysets que les modules (membre_dev : aucune facture ; client exclu).
+  Frontend : champ Topbar + raccourci Ctrl+K, resultats groupes, clic vers fiche.
+- Docs API auto drf-spectacular /api/docs/.
+- Footer = statut API reel (ping /settings/entreprise/ toutes les 60 s).
+- AuditLog auto sur create/update/delete sensibles (modele + admin lecture
+  seule presents, ecriture non branchee).
+- Celery en mode eager (synchrone, sans Redis ni Beat actif).
+- Deploiement Docker hub.digicom.ml:8002, domaine unique front+API+tracker
+  derriere nginx TLS, proxy gunicorn + build Vite statique. .env backend prod
+  (SMTP systeme, tokens, CAREER_WEBHOOK_TOKEN). Base : migrate + seeds
+  (seed_phase1, seed_users 9 comptes, seed_projets, seed_phase23). Sauvegardes :
+  db.sqlite3 + media/. Premier lancement sans paiement en ligne.
+
+16. NUMEROTATIONS, CONVENTIONS, DEVISE
+--------------------------------------
+- FACTURE/DEVIS-SLUG-JJ-MM-AAAA-ID, RECU-..., TICK-AAAA-NNNN, BUG-AAAA-NNNN,
+  TASK-AAAA-NNNN (taches, compteur atomique/an, sans slug),
+  BDC/BDL/ACHAT/RECU-F-SLUG-AAAA-NNNN (compteur atomique/an),
+  COUR-AAAA-NNNN, DCH-AAAA-NNNN.
+- Langue UI : FR. Dates : DD/MM/YYYY. Devise : XOF (F CFA).
+- Branches : main (deploiement direct). Commits conventionnels.
+- Ne jamais exposer cle SMTP ou private_key tracker au frontend.
+  .env jamais commite (.gitignore). Droits .env prod 600 www-data.
+
+17. ROADMAP / RESTE A FAIRE (v1.4 : Jira §1-5 livres)
+---------------------------
+Fait (Phase 1-3) : Auth+Roles+Clients 360°, Projets+Kanban+Portal, Finance
+devis/factures/recus PDF + Fournisseurs/Achats, Tickets+aval+mailing,
+RH+Juridique+Com+Bug tracker+KPI+notifs+push+biometrie+pointage QR+client
+interne.
+Fait (v1.4 Jira) : estimation/priorite TASK-AAAA-NNNN + done_at, sprints +
+backlog + demarrer/terminer, burndown/velocite a la demande (+ carte Pilotage),
+webhook GitHub entrant V1 (liens commits/PR/branches, auto-statuts, secret
+unique), recherche globale Topbar Ctrl+K, OpenAPI drf-spectacular a jour.
+
+A faire :
+- Relances/SLA/echeances auto (Celery Beat non actif), relances auto impayes.
+- Evaluations annuelles, trombinoscope RH.
+- Export CSV, export PDF rapport de sprint ReportLab, AuditLog auto (ecriture).
+- API de paiement (liens pay.digicom.ml), SMTP dynamique par identite +
+  fernet, SPF/DKIM/DMARC, durcissement origine tracker, mention consentement
+  trackers clients.
+- Hors perimetre : Slack (rien implemente).
+
+================================================================================
+Fin FEATURES.txt v1.4 - Ref : SPECIFICATIONS.md v1.3 + SPEC Jira Dev + WEBHOOK-CARRIERE.md + code
+frontend/backend reels au 06/10/2026.
+================================================================================

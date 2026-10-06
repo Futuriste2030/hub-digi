@@ -18,6 +18,7 @@ import Button from '../ui/Button.jsx';
 import { cap } from '../../utils/stats.js';
 import { LIBELLES_ROLE } from '../../data/session.js';
 import { useAuth } from '../../store/auth.js';
+import { rechercheGlobale } from '../../api/projets.js';
 import {
   conversations, envoyerMessage, filDiscussion, listerNotifs, marquerLus, marquerNotifLue, toutMarquerLu,
 } from '../../api/centre.js';
@@ -109,6 +110,9 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
   const [texte, setTexte] = useState('');
   const [users, setUsers] = useState([]);
   const [nouveauAvec, setNouveauAvec] = useState('');
+  const [resultats, setResultats] = useState([]);
+  const minuteurRecherche = useRef(null);
+  const zoneRechercheRef = useClickOutside(() => setResultats([]));
   const nonLuesN = notifs.filter((n) => !n.lue).length;
   const nonLusC = convos.reduce((s, c) => s + (c.non_lus ?? 0), 0);
 
@@ -218,20 +222,56 @@ export default function Topbar({ ouvrirMenu, basculerSidebar, retractee, query, 
           <p className="truncate font-courant text-[13px] text-gris-600">{dateStr} · Bonjour, {session?.nom ?? 'Super Admin'}</p>
         </div>
 
-        <div className="relative ml-esp-5 hidden max-w-96 flex-1 md:block">
+        <div className="relative ml-esp-5 hidden max-w-96 flex-1 md:block" ref={zoneRechercheRef}>
           <Search size={20} aria-hidden="true" className="pointer-events-none absolute left-esp-3 top-1/2 -translate-y-1/2 text-gris-400" />
           <input
             ref={rechercheRef}
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Rechercher ticket, client, projet…"
+            onChange={(e) => {
+              const v = e.target.value;
+              setQuery(v);
+              if (minuteurRecherche.current) clearTimeout(minuteurRecherche.current);
+              if (v.trim().length < 2 || session?.role === 'client') { setResultats([]); return; }
+              minuteurRecherche.current = setTimeout(async () => {
+                try {
+                  const r = await rechercheGlobale(v.trim());
+                  setResultats(r.groupes ?? []);
+                } catch {
+                  setResultats([]);
+                }
+              }, 300);
+            }}
+            placeholder="Rechercher tâche, bug, projet, client… (Ctrl+K)"
             aria-label="Recherche globale"
+            aria-expanded={resultats.length > 0}
             className="h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-100 pl-11 pr-16 font-courant text-[15px] text-gris-700 placeholder:text-gris-400 focus:border-digi"
           />
           <kbd aria-hidden="true" className="absolute right-esp-3 top-1/2 -translate-y-1/2 rounded-sm border border-gris-300 bg-gris-0 px-esp-2 py-0.5 font-mono text-[13px] text-gris-600">
             ⌘K
           </kbd>
+          {resultats.length > 0 && (
+            <div role="listbox" aria-label="Résultats de recherche" className="absolute inset-x-0 top-[calc(100%+8px)] z-50 max-h-96 overflow-y-auto rounded-lg border border-gris-300 bg-gris-0 p-esp-2 shadow-ombre-4">
+              {resultats.map((g) => (
+                <div key={g.type}>
+                  <p className="px-esp-3 pb-esp-1 pt-esp-2 font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">{g.type}</p>
+                  {g.resultats.map((r) => (
+                    <button
+                      key={`${g.type}-${r.id}`}
+                      type="button"
+                      role="option"
+                      aria-selected="false"
+                      onClick={() => { setResultats([]); naviguer(r.url); }}
+                      className="flex w-full items-center gap-esp-2 rounded-md p-esp-3 text-left hover:bg-gris-100"
+                    >
+                      <span className="min-w-0 flex-1 truncate font-courant text-[15px] text-gris-900">{r.titre}</span>
+                      {r.reference && <span className="shrink-0 font-mono text-[13px] text-gris-600">{r.reference}</span>}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-esp-1">

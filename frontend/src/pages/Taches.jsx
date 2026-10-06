@@ -6,6 +6,7 @@ import Badge from '../components/ui/Badge.jsx';
 import ModaleTache from '../components/ModaleTache.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_CHEF_DEV, ROLES_DEV, peutVoir } from '../lib/acces.js';
+import { PRIORITE_LABEL, PRIORITE_TON, estimationTexte } from '../lib/taches.js';
 import { creerTache, listerProjets, listerTaches, majTache, supprimerTache } from '../api/projets.js';
 import BoutonSupprimer from '../components/ui/BoutonSupprimer.jsx';
 import { messageErreur } from '../api/client.js';
@@ -51,7 +52,7 @@ export default function Taches() {
   const visibles = taches.filter(
     (t) =>
       (projet === 'tous' || String(t.project) === String(projet)) &&
-      (q === '' || t.titre.toLowerCase().includes(q) || (titresProjets[t.project] ?? '').toLowerCase().includes(q)),
+      (q === '' || t.titre.toLowerCase().includes(q) || (t.reference ?? '').toLowerCase().includes(q) || (titresProjets[t.project] ?? '').toLowerCase().includes(q)),
   );
 
   const deplacer = async (tache, dir) => {
@@ -66,9 +67,15 @@ export default function Taches() {
     }
   };
 
-  const creer = async ({ projetId, titre, statut }) => {
+  const creer = async ({ projetId, titre, statut, priorite, estimation_points, estimation_heures }) => {
     try {
-      const t = await creerTache({ project: projetId, titre, statut });
+      const payload = { project: projetId, titre, statut };
+      if (peutSupprimer) {
+        if (priorite) payload.priorite = priorite;
+        if (estimation_points !== undefined) payload.estimation_points = estimation_points;
+        if (estimation_heures !== undefined) payload.estimation_heures = estimation_heures;
+      }
+      const t = await creerTache(payload);
       setTaches((prev) => [t, ...prev]);
       setModale(false);
       notifier({ type: 'succes', titre: 'Tâche créée', texte: `${t.titre}.` });
@@ -149,8 +156,14 @@ export default function Taches() {
               </header>
               {items.map((t) => (
                 <article key={t.id} className="rounded-lg border border-gris-300 bg-gris-0 p-esp-3 shadow-ombre-1">
+                  <p className="font-mono text-[12px] text-gris-500">{t.reference}</p>
                   <p className="font-courant text-[15px] font-semibold text-gris-900">{t.titre}</p>
                   <p className="mt-esp-1 font-courant text-[13px] text-digi-texte">{titresProjets[t.project] ?? ''}</p>
+                  <div className="mt-esp-1 flex flex-wrap gap-esp-1">
+                    <Badge ton={PRIORITE_TON[t.priorite] ?? 'neutre'}>{PRIORITE_LABEL[t.priorite] ?? t.priorite}</Badge>
+                    <Badge ton="neutre">{t.estimation_points ?? '—'} pts</Badge>
+                  </div>
+                  <p className="mt-esp-1 font-courant text-[13px] text-gris-600 dg-tnum">{estimationTexte(t)}</p>
                   <div className="mt-esp-2 flex items-center gap-esp-2">
                     <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-pilule bg-digi-voile font-courant text-[13px] font-bold text-digi">
                       {initiales(t.assigne_email)}
@@ -184,7 +197,7 @@ export default function Taches() {
       </div>
       )}
 
-      {modale && <ModaleTache projets={projets.map((p) => ({ id: p.id, nom: p.titre, client: p.client_nom }))} colonnes={COLONNES} onFermer={() => setModale(false)} onCreer={creer} />}
+      {modale && <ModaleTache projets={projets.map((p) => ({ id: p.id, nom: p.titre, client: p.client_nom }))} colonnes={COLONNES} onFermer={() => setModale(false)} onCreer={creer} estimationLectureSeule={!peutSupprimer} />}
     </div>
   );
 }

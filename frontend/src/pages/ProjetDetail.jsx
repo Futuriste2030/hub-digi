@@ -18,9 +18,13 @@ import { Card, CardHeader, CardBody } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import { Input, Textarea } from '../components/ui/Input.jsx';
 import ModaleTache from '../components/ModaleTache.jsx';
+import LiensGit from '../components/LiensGit.jsx';
+import SprintsTab from '../components/SprintsTab.jsx';
+import GitHubTab from '../components/GitHubTab.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_CHEF_DEV, ROLES_DEV, peutVoir } from '../lib/acces.js';
-import { creerJalon as creerJalonApi, creerTache, detailProjet, jalonsProjet, majJalon, majTache, tachesProjet } from '../api/projets.js';
+import { PRIORITE_LABEL, PRIORITE_TON, estimationTexte } from '../lib/taches.js';
+import { creerJalon as creerJalonApi, creerTache, detailProjet, jalonsProjet, majJalon, majTache, tachesProjet, listerSprints } from '../api/projets.js';
 import { listerBugs } from '../api/bugs.js';
 import { cleTrackerProjet, genererCleTracker, majProjet } from '../api/tracker.js';
 import { messageErreur } from '../api/client.js';
@@ -64,6 +68,10 @@ export default function ProjetDetail() {
   const [chargement, setChargement] = useState(true);
   const [introuvable, setIntrouvable] = useState(false);
   const [modale, setModale] = useState(false);
+  const [onglet, setOnglet] = useState('kanban');
+  const [sprints, setSprints] = useState([]);
+  const [sprintFiltre, setSprintFiltre] = useState('tous');
+  const [detailTache, setDetailTache] = useState(null);
   const [jalonTitre, setJalonTitre] = useState('');
   const [repoEdit, setRepoEdit] = useState(false);
   const [repoValeur, setRepoValeur] = useState('');
@@ -80,6 +88,14 @@ export default function ProjetDetail() {
       setTaches(ts);
       setJalons(js);
       setBugs(bs);
+      try {
+        const ss = await listerSprints({ project: id });
+        setSprints(ss);
+        const actif = ss.find((s) => s.statut === 'actif');
+        if (actif) setSprintFiltre(String(actif.id));
+      } catch {
+        /* sprints optionnels */
+      }
       if (['site_web', 'app_web'].includes(p.type)) {
         setCle(await cleTrackerProjet(id));
       }
@@ -117,9 +133,16 @@ export default function ProjetDetail() {
     }
   };
 
-  const creer = async ({ titre, statut }) => {
+  const creer = async ({ titre, statut, priorite, estimation_points, estimation_heures }) => {
     try {
-      const t = await creerTache({ project: Number(id), titre, statut });
+      const payload = { project: Number(id), titre, statut };
+      if (peutEditer) {
+        if (priorite) payload.priorite = priorite;
+        if (estimation_points !== undefined) payload.estimation_points = estimation_points;
+        if (estimation_heures !== undefined) payload.estimation_heures = estimation_heures;
+        if (sprintFiltre !== 'tous' && sprintFiltre !== 'backlog') payload.sprint = Number(sprintFiltre);
+      }
+      const t = await creerTache(payload);
       setTaches((prev) => [t, ...prev]);
       setModale(false);
       notifier({ type: 'succes', titre: 'Tâche créée', texte: titre });
@@ -341,10 +364,54 @@ export default function ProjetDetail() {
         </Card>
       </div>
 
+      <div role="tablist" aria-label="Sections du projet" className="mt-esp-6 flex flex-wrap gap-esp-2">
+        {[{ id: 'kanban', label: 'Kanban' }, { id: 'sprints', label: 'Sprints' }, ...(peutEditer ? [{ id: 'github', label: 'GitHub' }] : [])].map((o) => (
+          <button
+            key={o.id} role="tab" aria-selected={onglet === o.id} onClick={() => setOnglet(o.id)}
+            className={`min-h-[44px] rounded-md px-esp-4 font-courant text-[15px] font-semibold ${onglet === o.id ? 'bg-digi text-blanc' : 'bg-gris-200 text-gris-700 hover:bg-gris-300'}`}
+          >
+            {o.label}
+          </button>
+        ))}
+        <Link to={`/dev/backlog?projet=${projet.id}`} className="inline-flex min-h-[44px] items-center rounded-md px-esp-4 font-courant text-[15px] font-semibold text-digi-texte hover:bg-gris-200">
+          Backlog
+        </Link>
+      </div>
+
+      {onglet === 'sprints' && <SprintsTab projetId={projet.id} peutEditer={peutEditer} notifier={notifier} />}
+      {onglet === 'github' && peutEditer && <GitHubTab projet={projet} onProjetMaj={setProjet} notifier={notifier} />}
+
+      {onglet === 'kanban' && (
+      <>
+      <div className="mt-esp-4 flex flex-wrap items-center gap-esp-2">
+        <label htmlFor="flt-sprint" className="font-courant text-[14px] text-gris-600">Sprint</label>
+        <select
+          id="flt-sprint" value={sprintFiltre} onChange={(e) => setSprintFiltre(e.target.value)}
+          className="h-11 min-h-[44px] rounded-md border border-gris-300 bg-gris-0 px-esp-3 font-courant text-[14px]"
+        >
+          <option value="tous">Tous</option>
+          <option value="backlog">Backlog (sans sprint)</option>
+          {sprints.map((s) => <option key={s.id} value={s.id}>{s.nom} ({s.statut})</option>)}
+        </select>
+        {(() => {
+          const s = sprints.find((x) => String(x.id) === String(sprintFiltre));
+          if (!s) return null;
+          const n = Math.ceil((new Date(s.date_fin) - new Date()) / 86400000);
+          return (
+            <p className="font-courant text-[14px] text-gris-700" role="status">
+              <strong>{s.nom}</strong> — {s.objectif || 'sans objectif'} · {n < 0 ? 'dépassé' : `${n} j restants`} · {s.points_engages} pts engagés · {s.taches_terminees}/{s.taches_total} tâches
+            </p>
+          );
+        })()}
+      </div>
       <h2 className="mt-esp-7 !text-[18px]">Kanban</h2>
       <div className="mt-esp-3 grid grid-cols-1 gap-esp-4 md:grid-cols-2 xl:grid-cols-4">
         {COLONNES.map((col) => {
-          const items = taches.filter((t) => t.statut === col.id);
+          const items = taches.filter((t) => t.statut === col.id).filter((t) => {
+            if (sprintFiltre === 'tous') return true;
+            if (sprintFiltre === 'backlog') return t.sprint == null;
+            return String(t.sprint) === String(sprintFiltre);
+          });
           return (
             <section key={col.id} aria-label={col.libelle} className="flex flex-col gap-esp-3 rounded-lg bg-gris-200/60 p-esp-3">
               <header className="flex items-center justify-between px-esp-1">
@@ -353,7 +420,13 @@ export default function ProjetDetail() {
               </header>
               {items.map((t) => (
                 <article key={t.id} className="rounded-lg border border-gris-300 bg-gris-0 p-esp-3 shadow-ombre-1">
+                  <p className="font-mono text-[12px] text-gris-500">{t.reference} {t.ajoutee_en_cours_de_sprint && '· +sprint'}</p>
                   <p className="font-courant text-[15px] font-semibold text-gris-900">{t.titre}</p>
+                  <div className="mt-esp-1 flex flex-wrap gap-esp-1">
+                    <Badge ton={PRIORITE_TON[t.priorite] ?? 'neutre'}>{PRIORITE_LABEL[t.priorite] ?? t.priorite}</Badge>
+                    <Badge ton="neutre">{t.estimation_points ?? '—'} pts</Badge>
+                  </div>
+                  <p className="mt-esp-1 font-courant text-[13px] text-gris-600 dg-tnum">{estimationTexte(t)}</p>
                   <div className="mt-esp-2 flex items-center gap-esp-2">
                     <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-pilule bg-digi-voile font-courant text-[13px] font-bold text-digi">
                       {initialesDe(t.assigne_email)}
@@ -364,11 +437,18 @@ export default function ProjetDetail() {
                     <button type="button" onClick={() => deplacer(t, -1)} disabled={col.id === ORDRE[0]} aria-label={`Reculer ${t.titre}`} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200 disabled:opacity-45">
                       <ChevronLeft size={20} aria-hidden="true" />
                     </button>
-                    <span className="font-courant text-[13px] text-gris-600">{col.libelle}</span>
+                    <button type="button" onClick={() => setDetailTache(detailTache?.id === t.id ? null : t)} aria-expanded={detailTache?.id === t.id} aria-label={`Détails ${t.titre}`} className="min-h-[44px] rounded-md px-esp-2 font-courant text-[13px] font-semibold text-digi-texte hover:bg-gris-200">
+                      Détails
+                    </button>
                     <button type="button" onClick={() => deplacer(t, 1)} disabled={col.id === ORDRE[ORDRE.length - 1]} aria-label={`Avancer ${t.titre}`} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200 disabled:opacity-45">
                       <ChevronRight size={20} aria-hidden="true" />
                     </button>
                   </div>
+                  {detailTache?.id === t.id && (
+                    <div className="mt-esp-2 border-t border-gris-200 pt-esp-2">
+                      <LiensGit tache={t} notifier={notifier} />
+                    </div>
+                  )}
                 </article>
               ))}
               {items.length === 0 && (
@@ -384,22 +464,27 @@ export default function ProjetDetail() {
         <CardBody className="flex flex-col gap-esp-3 pt-esp-5">
           {bugs.length === 0 && <p className="font-courant text-[15px] text-gris-600">Aucun bug. Le tracker alimente cette liste en direct.</p>}
           {bugs.map((b) => (
-            <div key={b.numero} className="flex items-start gap-esp-3 rounded-lg bg-gris-100 p-esp-3">
-              <Bug size={20} aria-hidden="true" className="mt-esp-1 shrink-0 text-digi" />
-              <div className="min-w-0 flex-1">
-                <p className="font-mono text-[13px] text-gris-600">{b.numero}</p>
-                <p className="font-courant text-[15px] font-semibold text-gris-900">{b.titre}</p>
+            <div key={b.numero} className="flex flex-col gap-esp-2 rounded-lg bg-gris-100 p-esp-3">
+              <div className="flex items-start gap-esp-3">
+                <Bug size={20} aria-hidden="true" className="mt-esp-1 shrink-0 text-digi" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[13px] text-gris-600">{b.numero}</p>
+                  <p className="font-courant text-[15px] font-semibold text-gris-900">{b.titre}</p>
+                </div>
+                <span className="flex shrink-0 flex-col items-end gap-esp-1">
+                  <Badge ton={GRAVITE_TON[b.gravite] ?? 'neutre'}>{b.gravite}</Badge>
+                  <Badge ton="neutre">{b.statut}</Badge>
+                </span>
               </div>
-              <span className="flex shrink-0 flex-col items-end gap-esp-1">
-                <Badge ton={GRAVITE_TON[b.gravite] ?? 'neutre'}>{b.gravite}</Badge>
-                <Badge ton="neutre">{b.statut}</Badge>
-              </span>
+              <LiensGit bug={b} notifier={notifier} />
             </div>
           ))}
         </CardBody>
       </Card>
+      </>
+      )}
 
-      {modale && <ModaleTache projets={[{ id: projet.id, nom: projet.titre, client: projet.client_nom }]} projetFixe={projet.id} colonnes={COLONNES} onFermer={() => setModale(false)} onCreer={creer} />}
+      {modale && <ModaleTache projets={[{ id: projet.id, nom: projet.titre, client: projet.client_nom }]} projetFixe={projet.id} colonnes={COLONNES} onFermer={() => setModale(false)} onCreer={creer} estimationLectureSeule={!peutEditer} />}
     </div>
   );
 }

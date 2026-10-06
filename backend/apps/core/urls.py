@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .search import RechercheGlobaleView
 from .views import (
     ConversationsView, DashboardPersoView, DashboardSuperAdminView, EnvoyerMessageView, FilDiscussionView,
     GroupesChatView, MarquerGroupeLusView, MarquerLusView, MessagesGroupeView, NotificationViewSet, SeriesView,
@@ -11,6 +12,7 @@ router = DefaultRouter()
 router.register("notifications", NotificationViewSet, basename="notification")
 
 urlpatterns = [
+    path("search/", RechercheGlobaleView.as_view(), name="recherche-globale"),
     path("dashboard/super-admin/", DashboardSuperAdminView.as_view(), name="dashboard-admin"),
     path("dashboard/perso/", DashboardPersoView.as_view(), name="dashboard-perso"),
     path("dashboard/series/", SeriesView.as_view(), name="dashboard-series"),

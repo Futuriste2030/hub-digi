@@ -8,6 +8,7 @@ import AreaChart from '../components/charts/AreaChart.jsx';
 import Donut from '../components/charts/Donut.jsx';
 import { AnimatedNumber } from '../components/stats/Primitives.jsx';
 import NouveauProjetModal from '../components/NouveauProjetModal.jsx';
+import CarteSprint from '../components/CarteSprint.jsx';
 import { fCFA, num0, num1 } from '../utils/stats.js';
 import { ROLES_CHEF_DEV, ROLES_FINANCE, peutVoir, slugDepartement, urlTableauDeBord } from '../lib/acces.js';
 import { dashboardAdmin, dashboardPerso, seriesDashboard } from '../api/dashboard.js';
@@ -438,6 +439,7 @@ export default function Dashboard() {
   }
   const peutCreerProjet = peutVoir(session, ROLES_CHEF_DEV);
   const voitFinance = peutVoir(session, [...ROLES_FINANCE, 'admin']);
+  const voitSprints = peutVoir(session, ROLES_CHEF_DEV);
 
   const creer = async ({ nom, client, type, deadline }) => {
     const trouve = clientsOptions.find((c) => c.nom_societe === client);
@@ -486,6 +488,12 @@ export default function Dashboard() {
       <div className="mt-esp-6">
         <BandeauStats scope={donnees.scope} kpi={donnees.kpi} series={donnees.series} />
       </div>
+
+      {voitSprints && (
+        <div className="mt-esp-4">
+          <CarteSprint />
+        </div>
+      )}
 
       <div className="mt-esp-4 grid grid-cols-1 gap-esp-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
