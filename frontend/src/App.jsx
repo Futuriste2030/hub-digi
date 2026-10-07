@@ -38,6 +38,7 @@ const Devis = lazy(() => import('./pages/Devis.jsx'));
 const Depenses = lazy(() => import('./pages/Depenses.jsx'));
 const Fournisseurs = lazy(() => import('./pages/Fournisseurs.jsx'));
 const FournisseurDetail = lazy(() => import('./pages/FournisseurDetail.jsx'));
+const Formations = lazy(() => import('./pages/Formations.jsx'));
 const Parametres = lazy(() => import('./pages/Parametres.jsx'));
 const DevisDetail = lazy(() => import('./pages/DevisDetail.jsx'));
 const Paie = lazy(() => import('./pages/Paie.jsx'));
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="finance/depenses" element={<RequireRole roles={ROLES_FINANCE}><Depenses /></RequireRole>} />
             <Route path="finance/fournisseurs" element={<RequireRole roles={ROLES_FINANCE}><Fournisseurs /></RequireRole>} />
             <Route path="finance/fournisseurs/:id" element={<RequireRole roles={ROLES_FINANCE}><FournisseurDetail /></RequireRole>} />
+            <Route path="finance/formations" element={<RequireRole roles={ROLES_FINANCE}><Formations /></RequireRole>} />
             <Route path="finance/paie" element={<RequireRole roles={ROLES_FINANCE}><Paie /></RequireRole>} />
             <Route path="finance/paie/:id" element={<RequireRole roles={ROLES_FINANCE}><FichePaie /></RequireRole>} />
             <Route path="juridique/contrats" element={<RequireRole roles={ROLES_JURIDIQUE}><EspaceRedaction categorie="contrats" /></RequireRole>} />

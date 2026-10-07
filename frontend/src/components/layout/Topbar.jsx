@@ -51,6 +51,7 @@ const TITRES = {
   '/finance/devis': 'Devis',
   '/finance/recus': 'Reçus',
   '/finance/depenses': 'Dépenses',
+  '/finance/formations': 'Formations',
   '/finance/paie': 'Paie des employés',
   '/parametres': 'Paramètres',
   '/parametres/utilisateurs': 'Utilisateurs',

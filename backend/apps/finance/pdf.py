@@ -323,8 +323,15 @@ def _emetteur(soc):
 
 
 def _client_lignes(client, extra=None):
-    lignes = [_gras(client.nom_societe), propre(client.adresse), propre(client.phone),
-              propre(client.email)]
+    """Bloc destinataire : accepte un Client OU une Invoice (formations, client NULL)."""
+    from apps.finance.models import Invoice as _Invoice
+
+    if isinstance(client, _Invoice):
+        lignes = [_gras(client.destinataire_nom), propre(client.destinataire_phone),
+                  propre(client.destinataire_email)]
+    else:
+        lignes = [_gras(client.nom_societe), propre(client.adresse), propre(client.phone),
+                  propre(client.email)]
     if extra:
         lignes.append(propre(extra))
     return lignes
@@ -376,7 +383,7 @@ def pdf_facture(facture):
     base_paiement = getattr(settings, "PAYMENT_URL", "https://pay.digicom.ml").rstrip("/")
     lien = f"{base_paiement}/f/{facture.numero}" if paiement_actif else ""
     story.append(_blocs(normal, "Émetteur", _emetteur(soc), "Facturé à",
-                        _client_lignes(facture.client, lien or None)))
+                        _client_lignes(facture, lien or None)))
     story.append(Spacer(1, 4 * mm))
     story.append(_table_lignes(st, lignes, taux))
     story.append(Spacer(1, 3 * mm))
@@ -397,7 +404,6 @@ def pdf_recu(recu):
 
     doc, story, buf, normal, soc, gras, droite, droite_gras = _base("Reçu de paiement", recu.numero or "—")
     st = {"normal": normal, "gras": gras, "droite": droite, "droite_gras": droite_gras}
-    client = recu.invoice.client
     taux = TAUX_TVA_ACTIVE if recu.invoice.tva_active else TAUX_TVA
     story.append(Paragraph(
         f"Émis le <b>{_date_fr(recu.cree_le)}</b> · Facture <b>{propre(recu.invoice.numero)}</b> · "
@@ -408,11 +414,11 @@ def pdf_recu(recu):
         normal))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph(
-        f"Reçu de <b>{propre(client.nom_societe)}</b> — règlement {propre(recu.invoice.numero)}",
+        f"Reçu de <b>{propre(recu.invoice.destinataire_nom)}</b> — règlement {propre(recu.invoice.numero)}",
         normal))
     story.append(Spacer(1, 4 * mm))
     story.append(_blocs(normal, "Émetteur", _emetteur(soc), "Reçu de",
-                        _client_lignes(client, f"Facture {recu.invoice.numero}")))
+                        _client_lignes(recu.invoice, f"Facture {recu.invoice.numero}")))
     story.append(Spacer(1, 4 * mm))
     story.append(_table_lignes(st, recu.invoice.lignes.all(), taux))
     story.append(Spacer(1, 3 * mm))

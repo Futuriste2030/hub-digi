@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.projects_dev",
     "apps.com",
     "apps.finance",
+    "apps.formations",
     "apps.fournisseurs",
     "apps.rh",
     "apps.juridique",

@@ -43,18 +43,32 @@ class InvoiceSerializer(serializers.ModelSerializer):
     paye = serializers.ReadOnlyField()
     solde = serializers.ReadOnlyField()
     lignes = LigneSerializer(many=True, required=False)
-    client_nom = serializers.CharField(source="client.nom_societe", read_only=True)
-    client_email = serializers.CharField(source="client.email", read_only=True)
-    client_adresse = serializers.CharField(source="client.adresse", read_only=True)
-    client_phone = serializers.CharField(source="client.phone", read_only=True)
+    client_nom = serializers.SerializerMethodField()
+    client_email = serializers.SerializerMethodField()
+    client_adresse = serializers.SerializerMethodField()
+    client_phone = serializers.SerializerMethodField()
     project_titre = serializers.CharField(source="project.titre", read_only=True)
+    formation_titre = serializers.CharField(source="inscription.formation.titre", read_only=True)
 
     class Meta:
         model = Invoice
-        fields = ["id", "client", "client_nom", "client_email", "client_adresse", "client_phone",
-                  "project", "project_titre", "numero", "tva_active", "statut", "total", "paye", "solde",
+        fields = ["id", "client", "inscription", "client_nom", "client_email", "client_adresse",
+                  "client_phone", "formation_titre", "project", "project_titre", "numero",
+                  "tva_active", "statut", "envoyee_le", "total", "paye", "solde",
                   "lignes", "cree_le"]
-        read_only_fields = ["numero"]
+        read_only_fields = ["numero", "envoyee_le"]
+
+    def get_client_nom(self, obj):
+        return obj.destinataire_nom
+
+    def get_client_email(self, obj):
+        return obj.destinataire_email
+
+    def get_client_adresse(self, obj):
+        return obj.client.adresse if obj.client_id else ""
+
+    def get_client_phone(self, obj):
+        return obj.destinataire_phone
 
     def create(self, validated_data):
         lignes = validated_data.pop("lignes", [])
@@ -67,10 +81,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
 class ReceiptSerializer(serializers.ModelSerializer):
     facture_numero = serializers.CharField(source="invoice.numero", read_only=True)
-    client_nom = serializers.CharField(source="invoice.client.nom_societe", read_only=True)
-    client_email = serializers.CharField(source="invoice.client.email", read_only=True)
-    client_adresse = serializers.CharField(source="invoice.client.adresse", read_only=True)
-    client_phone = serializers.CharField(source="invoice.client.phone", read_only=True)
+    client_nom = serializers.SerializerMethodField()
+    client_email = serializers.SerializerMethodField()
+    client_adresse = serializers.SerializerMethodField()
+    client_phone = serializers.SerializerMethodField()
 
     class Meta:
         model = Receipt
@@ -78,6 +92,18 @@ class ReceiptSerializer(serializers.ModelSerializer):
                   "client_adresse", "client_phone", "numero", "montant", "moyen",
                   "ref_transaction", "cree_le"]
         read_only_fields = ["numero"]
+
+    def get_client_nom(self, obj):
+        return obj.invoice.destinataire_nom
+
+    def get_client_email(self, obj):
+        return obj.invoice.destinataire_email
+
+    def get_client_adresse(self, obj):
+        return obj.invoice.client.adresse if obj.invoice.client_id else ""
+
+    def get_client_phone(self, obj):
+        return obj.invoice.destinataire_phone
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -140,7 +166,8 @@ class DevisViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
 
 
 class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
-    queryset = Invoice.objects.select_related("client").prefetch_related("lignes", "recus").all()
+    queryset = Invoice.objects.select_related("client", "inscription__formation",
+                                              "inscription__participant").prefetch_related("lignes", "recus").all()
     serializer_class = InvoiceSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["client", "statut"]
@@ -155,7 +182,13 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
     def payer(self, request, pk=None):
         """Enregistre un paiement -> reçu auto (SPEC §5.7)."""
         invoice = self.get_object()
-        ser = ReceiptSerializer(data={**request.data, "invoice": invoice.id})
+        # Champs explicites (pas de **request.data : multipart = listes).
+        ser = ReceiptSerializer(data={
+            "invoice": invoice.id,
+            "montant": request.data.get("montant"),
+            "moyen": request.data.get("moyen", Receipt.MOYEN_ESPECES),
+            "ref_transaction": request.data.get("ref_transaction", ""),
+        })
         ser.is_valid(raise_exception=True)
         recu = ser.save()
         # Relecture sans cache prefetch (recus créés à l'instant) pour solde exact.
@@ -165,8 +198,8 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
         from apps.mailing.services import send_templated_mail
 
         send_templated_mail(
-            "recu_disponible", invoice.client.email,
-            {"societe": invoice.client.nom_societe, "numero": recu.numero,
+            "recu_disponible", invoice.destinataire_email,
+            {"societe": invoice.destinataire_nom, "numero": recu.numero,
              "montant": f"{float(recu.montant):,.0f}".replace(",", " "),
              "facture_numero": invoice.numero},
             department_slug="finance", client=invoice.client,
@@ -174,11 +207,44 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
         return Response(ReceiptSerializer(recu).data, status=201)
 
     @action(detail=True, methods=["post"])
+    def whatsapp(self, request, pk=None):
+        """Envoi facture formation via WhatsApp : brouillon -> envoyée (+ envoyee_le).
+
+        Retourne le numéro international + le message prêt (le front ouvre wa.me).
+        Réservé aux factures liées à une inscription formation (client NULL)."""
+        from apps.formations.views import message_whatsapp, telephone_whatsapp
+
+        invoice = self.get_object()
+        if invoice.inscription_id is None:
+            return Response({"detail": "WhatsApp réservé aux factures formations."}, status=400)
+        telephone = telephone_whatsapp(invoice.destinataire_phone)
+        if not telephone:
+            return Response({"detail": "Téléphone participant manquant."}, status=400)
+        if invoice.statut == Invoice.STATUT_BROUILLON:
+            from django.utils import timezone
+
+            invoice.statut = Invoice.STATUT_ENVOYEE
+            invoice.envoyee_le = timezone.now()
+            invoice.save(update_fields=["statut", "envoyee_le"])
+        return Response({
+            "telephone": telephone,
+            "message": message_whatsapp(invoice),
+            "statut": invoice.statut,
+            "envoyee_le": invoice.envoyee_le,
+        })
+
+    @action(detail=True, methods=["post"])
     def envoyer(self, request, pk=None):
         invoice = self.get_object()
+        if invoice.client_id is None:
+            return Response({"detail": "Facture formation : utilisez l'envoi WhatsApp."}, status=400)
         if invoice.statut == Invoice.STATUT_BROUILLON:
             invoice.statut = Invoice.STATUT_VALIDEE
         invoice.statut = Invoice.STATUT_ENVOYEE if invoice.statut == Invoice.STATUT_VALIDEE else invoice.statut
+        if invoice.envoyee_le is None and invoice.statut == Invoice.STATUT_ENVOYEE:
+            from django.utils import timezone
+
+            invoice.envoyee_le = timezone.now()
         invoice.save()
         from django.conf import settings
 

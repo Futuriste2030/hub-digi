@@ -80,11 +80,17 @@ class Invoice(models.Model):
         (STATUT_PAYEE, "Payée"), (STATUT_PARTIELLE, "Partielle"), (STATUT_IMPAYEE, "Impayée"),
     ]
 
-    client = models.ForeignKey("clients.Client", on_delete=models.CASCADE, related_name="factures")
+    client = models.ForeignKey("clients.Client", null=True, blank=True,
+                                   on_delete=models.CASCADE, related_name="factures",
+                                   help_text="NULL pour les factures formations (voir inscription).")
+    inscription = models.ForeignKey("formations.InscriptionFormation", null=True, blank=True,
+                                    on_delete=models.SET_NULL, related_name="factures",
+                                    help_text="Inscription formation facturée (factures formations).")
     project = models.ForeignKey("projects_dev.Project", null=True, blank=True, on_delete=models.SET_NULL)
     numero = models.CharField(max_length=80, unique=True, blank=True)
     tva_active = models.BooleanField(default=False, help_text="TVA 18 % applicable (désactivée par défaut : pas de TVA au Mali)")
     statut = models.CharField(max_length=20, choices=STATUTS, default=STATUT_BROUILLON)
+    envoyee_le = models.DateTimeField(null=True, blank=True, help_text="Passage en envoyée (clic WhatsApp ou envoi mail).")
     cree_le = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -100,8 +106,36 @@ class Invoice(models.Model):
         super().save(*args, **kwargs)
         if nouveau:
             date = timezone.localdate(self.cree_le) if self.cree_le else timezone.localdate()
-            self.numero = numero_document("FACTURE", self.client.nom_societe, date, self.pk)
+            self.numero = numero_document("FACTURE", slug_client(self.destinataire_nom), date, self.pk)
             super().save(update_fields=["numero"])
+
+    @property
+    def destinataire_nom(self):
+        """Nom affiché : société cliente, ou participant formation, ou repli."""
+        if self.client_id and getattr(self.client, "nom_societe", ""):
+            return self.client.nom_societe
+        insc = getattr(self, "inscription", None)
+        if insc is not None and getattr(insc, "participant", None) is not None:
+            return insc.participant.full_name
+        return "Formation"
+
+    @property
+    def destinataire_email(self):
+        if self.client_id and getattr(self.client, "email", ""):
+            return self.client.email
+        insc = getattr(self, "inscription", None)
+        if insc is not None and getattr(insc, "participant", None) is not None:
+            return insc.participant.email
+        return ""
+
+    @property
+    def destinataire_phone(self):
+        if self.client_id and getattr(self.client, "phone", ""):
+            return self.client.phone
+        insc = getattr(self, "inscription", None)
+        if insc is not None and getattr(insc, "participant", None) is not None:
+            return insc.participant.phone
+        return ""
 
     @property
     def total(self):
@@ -152,7 +186,7 @@ class Receipt(models.Model):
         super().save(*args, **kwargs)
         if nouveau:
             date = timezone.localdate(self.cree_le) if self.cree_le else timezone.localdate()
-            self.numero = numero_document("RECU", self.invoice.client.nom_societe, date, self.pk)
+            self.numero = numero_document("RECU", slug_client(self.invoice.destinataire_nom), date, self.pk)
             super().save(update_fields=["numero"])
 
 
