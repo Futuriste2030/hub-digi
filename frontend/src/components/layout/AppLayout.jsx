@@ -8,6 +8,7 @@ import ChargementPage from '../ChargementPage.jsx';
 import { useAuth, useSession } from '../../store/auth.js';
 import { chargerEntreprise } from '../../data/parametres.js';
 import { api } from '../../api/client.js';
+import { statutPointage } from '../../api/ressources.js';
 
 /* Coquille logicielle : sidebar marine rétractable + colonne (topbar, contenu, pied fin).
    Fournit aux pages : recherche globale, notifications toast. Session réelle (JWT). */
@@ -31,6 +32,10 @@ export default function AppLayout() {
   const session = useSession();
   const localisation = useLocation();
   const [pret, setPret] = useState(false);
+  /* Garde pointage obligatoire : arrivée non pointée le matin -> forcé sur /pointage.
+     Bloque le retour navigateur (token persisté) + les clics sidebar qui échappaient
+     à l'écran post-login (qui ne tournait qu'au login). Départ = non bloquant. */
+  const [pointageBloquant, setPointageBloquant] = useState(null);
   /* Statut API réel (prod) : ping au chargement puis toutes les 60 s.
      null = vérification en cours, true = joignable, false = injoignable. */
   const [apiOk, setApiOk] = useState(null);
@@ -39,6 +44,25 @@ export default function AppLayout() {
     restaurer().finally(() => setPret(true));
     chargerEntreprise();
   }, [restaurer]);
+
+  /* Revérifié à chaque navigation : couvre reopen navigateur + évasion par sidebar.
+     Fail-open si API indisponible (comme au login). Clients exclus (pas de fiche employé). */
+  useEffect(() => {
+    if (!pret || !session) return;
+    if (session.role === 'client') {
+      setPointageBloquant(false);
+      return;
+    }
+    let actif = true;
+    statutPointage()
+      .then((s) => {
+        if (actif) setPointageBloquant(s?.doit_pointer === true && s?.type_attendu === 'arrivee');
+      })
+      .catch(() => {
+        if (actif) setPointageBloquant(false);
+      });
+    return () => { actif = false; };
+  }, [pret, session, localisation.pathname]);
 
   useEffect(() => {
     let actif = true;
@@ -61,6 +85,13 @@ export default function AppLayout() {
   }
   if (!pret || !session) {
     return <ChargementPage message="Chargement de votre espace…" />;
+  }
+  /* Arrivée due le matin : toute route interne rebondit sur /pointage (sauf /pointage lui-même). */
+  if (pointageBloquant === null) {
+    return <ChargementPage message="Vérification du pointage…" />;
+  }
+  if (pointageBloquant && localisation.pathname !== '/pointage') {
+    return <Navigate to="/pointage" replace />;
   }
 
   const basculerRetractee = () => {
