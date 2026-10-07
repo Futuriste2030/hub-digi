@@ -1,10 +1,14 @@
 """Finance API — SPEC §5.7/§12 : quotes/invoices/receipts/expenses + pdf/send/validate/pay."""
 
+from django.conf import settings as dj_settings
 from django.http import FileResponse
+from django.utils.crypto import constant_time_compare
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.views import APIView
 
 from .models import Devis, DevisLigne, Expense, FichePaie, Invoice, InvoiceLigne, LignePaie, Receipt
 from .pdf import pdf_devis, pdf_facture, pdf_recu
@@ -261,6 +265,58 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
             department_slug="finance", client=invoice.client,
         )
         return Response(InvoiceSerializer(invoice).data)
+
+
+class PayWebhookView(APIView):
+    """Confirmation de paiement pay.digicom.ml -> reçu auto (public, token, throttle).
+
+    Payload : {facture_numero, montant, ref_transaction, moyen?}.
+    Idempotent : même ref_transaction -> 200 doublon, jamais 2 reçus.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "webhook"
+
+    def post(self, request):
+        token = request.headers.get("X-Hub-Token", "")
+        if not dj_settings.CAREER_WEBHOOK_TOKEN or not constant_time_compare(token, dj_settings.CAREER_WEBHOOK_TOKEN):
+            return Response({"detail": "refusé"}, status=403)
+        numero = (request.data.get("facture_numero") or "").strip()
+        ref = (request.data.get("ref_transaction") or "").strip()
+        try:
+            montant = float(request.data.get("montant") or 0)
+        except (TypeError, ValueError):
+            montant = 0
+        if not numero or not ref or montant <= 0:
+            return Response({"detail": "facture_numero + montant > 0 + ref_transaction requis."}, status=400)
+        try:
+            invoice = Invoice.objects.prefetch_related("lignes", "recus").get(numero=numero)
+        except Invoice.DoesNotExist:
+            return Response({"detail": "Facture introuvable."}, status=404)
+        existant = Receipt.objects.filter(ref_transaction=ref).first()
+        if existant:
+            return Response({"id": existant.id, "numero": existant.numero, "doublon": True}, status=200)
+        moyen = request.data.get("moyen") or Receipt.MOYEN_MOBILE_MONEY
+        if moyen not in dict(Receipt.MOYENS):
+            moyen = Receipt.MOYEN_MOBILE_MONEY
+        recu = Receipt.objects.create(invoice=invoice, montant=montant, moyen=moyen,
+                                      ref_transaction=ref)
+        invoice = Invoice.objects.prefetch_related("lignes", "recus").get(id=invoice.id)
+        invoice.statut = Invoice.STATUT_PAYEE if invoice.solde <= 0 else Invoice.STATUT_PARTIELLE
+        invoice.save()
+        from apps.mailing.services import send_templated_mail
+
+        send_templated_mail(
+            "recu_disponible", invoice.destinataire_email,
+            {"societe": invoice.destinataire_nom, "numero": recu.numero,
+             "montant": f"{float(recu.montant):,.0f}".replace(",", " "),
+             "facture_numero": invoice.numero},
+            department_slug="finance", client=invoice.client,
+        )
+        return Response({"id": recu.id, "numero": recu.numero,
+                         "statut_facture": invoice.statut}, status=201)
 
 
 class ReceiptViewSet(viewsets.ModelViewSet):

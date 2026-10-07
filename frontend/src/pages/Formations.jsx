@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Search, Banknote, Printer, MessageCircle, X } from 'lucide-react';
+import { Search, Banknote, Printer, MessageCircle, Trash2, X } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import { Card, CardBody } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import { Label, Input } from '../components/ui/Input.jsx';
-import { listerInscriptionsFormation, ouvrirWhatsapp, statsFormations, whatsappFacture } from '../api/formations.js';
+import { ROLES_CHEF_FINANCE, peutVoir } from '../lib/acces.js';
+import { useSession } from '../store/auth.js';
+import { listerInscriptionsFormation, ouvrirWhatsapp, statsFormations, supprimerInscriptionFormation, whatsappFacture } from '../api/formations.js';
 import { payerFacture, telechargerPdf, pdfFacture } from '../api/finance.js';
 import { messageErreur } from '../api/client.js';
 import { fCFA } from '../utils/stats.js';
@@ -80,6 +82,8 @@ function ModaleEncaisser({ inscription, onFermer, onEncaisser }) {
 
 export default function Formations() {
   const { notifier } = useOutletContext();
+  const session = useSession();
+  const peutSupprimer = peutVoir(session, ROLES_CHEF_FINANCE);
   const [inscriptions, setInscriptions] = useState([]);
   const [stats, setStats] = useState(null);
   const [chargement, setChargement] = useState(true);
@@ -143,6 +147,17 @@ export default function Formations() {
       await telechargerPdf(pdfFacture(inscription.facture_id), `${inscription.facture_numero}.pdf`);
     } catch (e) {
       notifier({ type: 'erreur', titre: 'PDF impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const supprimer = async (inscription) => {
+    if (!window.confirm(`Supprimer l'inscription ${inscription.reference} (${inscription.participant_nom}) et sa facture non soldée ?`)) return;
+    try {
+      await supprimerInscriptionFormation(inscription.id);
+      notifier({ type: 'succes', titre: 'Inscription supprimée', texte: inscription.reference });
+      charger();
+    } catch (e) {
+      notifier({ type: 'erreur', titre: 'Suppression impossible', texte: messageErreur(e) });
     }
   };
 
@@ -212,6 +227,11 @@ export default function Formations() {
                     <Button variante="fantome" taille="sm" onClick={() => telecharger(i)} disabled={!i.facture_id}>
                       <Printer size={16} aria-hidden="true" /> PDF
                     </Button>
+                    {peutSupprimer && (
+                      <Button variante="fantome" taille="sm" onClick={() => supprimer(i)} aria-label={`Supprimer ${i.reference}`}>
+                        <Trash2 size={16} aria-hidden="true" />
+                      </Button>
+                    )}
                   </div>
                 </li>
               ))}

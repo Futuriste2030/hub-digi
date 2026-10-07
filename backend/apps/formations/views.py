@@ -35,22 +35,23 @@ def telephone_whatsapp(brut):
 
 
 def message_whatsapp(invoice):
-    """Message prêt à envoyer : inscription confirmée + facture + montant (+ lien pay si actif)."""
+    """Message prêt à envoyer : inscription confirmée + facture + lien de paiement.
+
+    Le lien pay vit avec la facture : le client paie lui-même sur pay.digicom.ml,
+    qui notifie le HUB (webhook /finance/paiements/webhook/) -> reçu auto.
+    Encaisser reste le fallback guichet."""
     from django.conf import settings
 
     insc = invoice.inscription
     prenom = (insc.participant.full_name or "").split()[0] if insc and insc.participant else ""
     titre = insc.formation.titre if insc else ""
     total = f"{float(invoice.total or 0):,.0f}".replace(",", " ")
-    texte = (
+    base = getattr(settings, "PAYMENT_URL", "https://pay.digicom.ml").rstrip("/")
+    return (
         f"Bonjour {prenom}, votre inscription à la formation « {titre} » est confirmée. "
-        f"Facture {invoice.numero} : {total} F à régler. Présentez ce message le jour J. "
+        f"Facture {invoice.numero} : {total} F. Payez ici : {base}/f/{invoice.numero} "
         "Digi Com & Technologies."
     )
-    if getattr(settings, "PAYMENT_ENABLED", False):
-        base = getattr(settings, "PAYMENT_URL", "https://pay.digicom.ml").rstrip("/")
-        texte += f" Payez ici : {base}/f/{invoice.numero}"
-    return texte
 
 
 class FormationSerializer(serializers.ModelSerializer):
@@ -175,6 +176,20 @@ class InscriptionViewSet(viewsets.ModelViewSet):
         )
         return Response(InscriptionSerializer(inscription).data
                         | {"facture_numero": facture.numero}, status=201)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role not in ("super_admin", "chef_finance"):
+            return Response({"detail": "Suppression réservée au Chef Finance."}, status=403)
+        inscription = self.get_object()
+        payees = [f for f in inscription.factures.all()
+                  if f.recus.exists()]
+        if payees:
+            return Response({"detail": "Inscription payée (reçu émis) : suppression impossible."},
+                            status=400)
+        # Factures non soldées liées : supprimées avec l'inscription (pas d'orphelines).
+        for facture in inscription.factures.all():
+            facture.delete()
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):

@@ -123,3 +123,69 @@ class FactureFormationTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.data["total_facture"], 50000)
         self.assertEqual(r.data["reste"], 50000)
+
+    def test_suppression_bloquee_si_payee(self):
+        self.client.post(f"/api/v1/finance/invoices/{self.facture.id}/payer/",
+                         {"montant": 50000, "moyen": "especes"})
+        r = self.client.delete(f"/api/v1/formations/inscriptions/{self.inscription.id}/")
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(InscriptionFormation.objects.filter(id=self.inscription.id).exists())
+
+    def test_suppression_non_payee_supprime_facture(self):
+        r = self.client.delete(f"/api/v1/formations/inscriptions/{self.inscription.id}/")
+        self.assertEqual(r.status_code, 204)
+        self.assertFalse(Invoice.objects.filter(id=self.facture.id).exists())
+
+    def test_suppression_reservee_chef(self):
+        membre = User.objects.create_user(username="m", email="m@digicom.ml", password="x",
+                                          role="membre_finance")
+        self.client.force_authenticate(user=membre)
+        r = self.client.delete(f"/api/v1/formations/inscriptions/{self.inscription.id}/")
+        self.assertEqual(r.status_code, 403)
+
+
+@override_settings(CAREER_WEBHOOK_TOKEN=TOKEN)
+class PayWebhookTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        formation = Formation.objects.create(slug="django-web", titre="Django Web", prix=50000)
+        participant = ParticipantFormation.objects.create(full_name="Awa Traoré",
+                                                          email="awa@mail.ml",
+                                                          phone="+22370000000")
+        inscription = InscriptionFormation.objects.create(formation=formation,
+                                                          participant=participant)
+        from apps.finance.models import InvoiceLigne
+
+        self.facture = Invoice.objects.create(client=None, inscription=inscription,
+                                              statut=Invoice.STATUT_BROUILLON)
+        InvoiceLigne.objects.create(invoice=self.facture, description="Formation : Django Web",
+                                    quantite=1, montant=50000)
+        self.url = "/api/v1/finance/paiements/webhook/"
+        self.payload = {"facture_numero": self.facture.numero, "montant": 50000,
+                        "ref_transaction": "PAY-1", "moyen": "mobile_money"}
+
+    def test_sans_token_403(self):
+        r = self.client.post(self.url, self.payload)
+        self.assertEqual(r.status_code, 403)
+
+    def test_confirmation_201_recu_auto(self):
+        r = self.client.post(self.url, self.payload, HTTP_X_HUB_TOKEN=TOKEN)
+        self.assertEqual(r.status_code, 201)
+        self.assertIn("RECU", r.data["numero"])
+        self.assertEqual(r.data["statut_facture"], Invoice.STATUT_PAYEE)
+        self.facture.refresh_from_db()
+        self.assertEqual(float(self.facture.solde), 0)
+
+    def test_idempotent_meme_ref(self):
+        self.client.post(self.url, self.payload, HTTP_X_HUB_TOKEN=TOKEN)
+        r = self.client.post(self.url, self.payload, HTTP_X_HUB_TOKEN=TOKEN)
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.data.get("doublon"))
+        from apps.finance.models import Receipt
+
+        self.assertEqual(Receipt.objects.filter(ref_transaction="PAY-1").count(), 1)
+
+    def test_facture_inconnue_404(self):
+        r = self.client.post(self.url, {**self.payload, "facture_numero": "FACTURE-X"},
+                             HTTP_X_HUB_TOKEN=TOKEN)
+        self.assertEqual(r.status_code, 404)

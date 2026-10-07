@@ -1,9 +1,10 @@
-import { get, post, toutLister } from './base.js';
+import { get, post, suppr, toutLister } from './base.js';
 import { payerFacture, telechargerPdf } from './finance.js';
 
 /* Formations : inscriptions vitrine + factures + WhatsApp + pilotage. */
 
 export const listerInscriptionsFormation = (params) => toutLister('/formations/inscriptions/', params);
+export const supprimerInscriptionFormation = (id) => suppr(`/formations/inscriptions/${id}/`);
 export const statsFormations = () => get('/formations/inscriptions/stats/');
 export const whatsappFacture = (id) => post(`/finance/invoices/${id}/whatsapp/`, {});
 
