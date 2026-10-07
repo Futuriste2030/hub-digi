@@ -32,7 +32,7 @@ export const listerConges = (params) => toutLister('/rh/leaves/', params);
 export const demanderConge = (payload) => post('/rh/leaves/', payload);
 export const validerConge = (id, payload) => patch(`/rh/leaves/${id}/validate/`, payload);
 export const listerCandidatures = (params) => toutLister('/rh/recruitments/', params);
-export const majCandidature = (id, payload) => patch(`/rh/recruitments/${id}/`, payload);
+export const statuerCandidature = (id, payload) => post(`/rh/recruitments/${id}/statuer/`, payload);
 export const supprimerCandidature = (id) => suppr(`/rh/recruitments/${id}/`);
 /* Pointage QR — SPEC §5.5 (MAJ 05/10/2026) : statut post-login, QR dynamique, scan GPS. */
 export const statutPointage = () => get('/rh/pointage/statut/');

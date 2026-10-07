@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Briefcase, UserCheck, UserX, CalendarClock, Globe } from 'lucide-react';
+import { Briefcase, UserCheck, UserX, CalendarClock, Globe, X } from 'lucide-react';
 import { Card, CardHeader, CardBody } from '../components/ui/Card.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
+import Button from '../components/ui/Button.jsx';
 import { ROLES_CHEF_RH, ROLES_RH, peutVoir } from '../lib/acces.js';
 import Badge from '../components/ui/Badge.jsx';
 import Alert from '../components/ui/Alert.jsx';
-import { listerCandidatures, majCandidature, supprimerCandidature } from '../api/ressources.js';
+import { Label, Textarea } from '../components/ui/Input.jsx';
+import { listerCandidatures, statuerCandidature, supprimerCandidature } from '../api/ressources.js';
 import BoutonSupprimer from '../components/ui/BoutonSupprimer.jsx';
 import { messageErreur } from '../api/client.js';
 
@@ -15,11 +17,76 @@ import { messageErreur } from '../api/client.js';
 const STATUT_LABEL = { recue: 'Reçue', entretien: 'Entretien', retenue: 'Retenue', rejetee: 'Rejetée' };
 const STATUT_TON = { recue: 'info', entretien: 'alerte', retenue: 'succes', rejetee: 'erreur' };
 
+/* Chaque décision envoie un mail au candidat : la modale exige le contenu
+   (date/lieu d'entretien, détails de retenue, motif de rejet obligatoire). */
+const MODALE_CONFIG = {
+  entretien: {
+    titre: 'Convoquer en entretien',
+    label: 'Date, lieu et précisions (envoyés au candidat)',
+    placeholder: 'Ex. Entretien le 12/10 à 10h à nos bureaux de Bamako, muni de votre CV.',
+    obligatoire: false,
+  },
+  retenue: {
+    titre: 'Retenir le candidat',
+    label: 'Détails (envoyés au candidat)',
+    placeholder: 'Ex. Poste confirmé, démarrage le 01/11, contact RH au 70 00 00 00.',
+    obligatoire: false,
+  },
+  rejetee: {
+    titre: 'Rejeter la candidature',
+    label: 'Motif du rejet (envoyé au candidat, obligatoire)',
+    placeholder: 'Ex. Profil ne correspondant pas au poste, dossier conservé 1 an.',
+    obligatoire: true,
+  },
+};
+
+function ModaleDecision({ candidat, decision, onFermer, onConfirmer }) {
+  const config = MODALE_CONFIG[decision];
+  const [message, setMessage] = useState('');
+  const [erreur, setErreur] = useState('');
+
+  const soumettre = (e) => {
+    e.preventDefault();
+    if (config.obligatoire && message.trim().length < 10) {
+      setErreur('Motif d\u2019au moins 10 caractères exigé : il sera envoyé au candidat.');
+      return;
+    }
+    onConfirmer(message.trim());
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-esp-4" role="dialog" aria-modal="true" aria-label={config.titre}>
+      <div className="dg-fondu absolute inset-0 bg-marine-profond/60" onClick={onFermer} />
+      <form onSubmit={soumettre} className="dg-pop relative w-full max-w-[520px] rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
+        <div className="flex items-start justify-between gap-esp-3">
+          <div>
+            <p className="dg-surtitre">Recrutement · {candidat.nom}</p>
+            <h2 className="!text-[21px]">{config.titre}</h2>
+          </div>
+          <button type="button" onClick={onFermer} aria-label="Fermer" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200">
+            <X size={20} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="mt-esp-5 flex flex-col gap-esp-4">
+          <div>
+            <Label htmlFor="dec-message">{config.label}</Label>
+            <div className="mt-esp-2"><Textarea id="dec-message" value={message} onChange={(e) => { setMessage(e.target.value); setErreur(''); }} placeholder={config.placeholder} rows={4} /></div>
+          </div>
+          {erreur && <p role="alert" className="font-courant text-[15px] text-erreur">{erreur}</p>}
+          <p className="dg-legende">Un e-mail sera envoyé à {candidat.email}.</p>
+          <Button type="submit" taille="lg" className="w-full">Confirmer — {STATUT_LABEL[decision].toLowerCase()}</Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Recrutement() {
   const { notifier, session } = useOutletContext();
   const [candidatures, setCandidatures] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState('');
+  const [decision, setDecision] = useState(null);
 
   const charger = async () => {
     try {
@@ -34,10 +101,13 @@ export default function Recrutement() {
 
   useEffect(() => { charger(); }, []);
 
-  const statuer = async (c, statut) => {
+  const statuer = async (message) => {
+    if (!decision) return;
+    const { candidat, statut } = decision;
     try {
-      await majCandidature(c.id, { statut });
-      notifier({ type: statut === 'rejetee' ? 'info' : 'succes', titre: `Candidat ${STATUT_LABEL[statut].toLowerCase()}`, texte: c.nom });
+      await statuerCandidature(candidat.id, { decision: statut, message });
+      notifier({ type: statut === 'rejetee' ? 'info' : 'succes', titre: `Candidat ${STATUT_LABEL[statut].toLowerCase()} — mail envoyé`, texte: candidat.nom });
+      setDecision(null);
       charger();
     } catch (e) {
       notifier({ type: 'info', titre: 'Action impossible', texte: messageErreur(e) });
@@ -122,16 +192,16 @@ export default function Recrutement() {
                   </Badge>
                   <Badge ton={STATUT_TON[c.statut] ?? 'neutre'}>{STATUT_LABEL[c.statut] ?? c.statut}</Badge>
                   {peutValider && c.statut === 'recue' && (
-                    <button type="button" onClick={() => statuer(c, 'entretien')} className="inline-flex min-h-[44px] items-center gap-esp-1 rounded-md border border-gris-300 px-esp-3 font-courant text-[15px] font-semibold text-gris-700 transition-colors duration-rapide hover:bg-gris-200">
+                    <button type="button" onClick={() => setDecision({ candidat: c, statut: 'entretien' })} className="inline-flex min-h-[44px] items-center gap-esp-1 rounded-md border border-gris-300 px-esp-3 font-courant text-[15px] font-semibold text-gris-700 transition-colors duration-rapide hover:bg-gris-200">
                       <CalendarClock size={16} aria-hidden="true" /> Entretien
                     </button>
                   )}
                   {peutValider && (c.statut === 'recue' || c.statut === 'entretien') && (
                     <span className="flex gap-esp-2">
-                      <button type="button" onClick={() => statuer(c, 'retenue')} aria-label={`Retenir ${c.nom}`} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md bg-succes px-esp-2 font-courant text-[15px] font-semibold text-blanc transition-colors duration-rapide hover:brightness-90">
+                      <button type="button" onClick={() => setDecision({ candidat: c, statut: 'retenue' })} aria-label={`Retenir ${c.nom}`} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md bg-succes px-esp-2 font-courant text-[15px] font-semibold text-blanc transition-colors duration-rapide hover:brightness-90">
                         <UserCheck size={16} aria-hidden="true" />
                       </button>
-                      <button type="button" onClick={() => statuer(c, 'rejetee')} aria-label={`Rejeter ${c.nom}`} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-gris-300 font-courant text-[15px] font-semibold text-erreur transition-colors duration-rapide hover:bg-erreur-fond">
+                      <button type="button" onClick={() => setDecision({ candidat: c, statut: 'rejetee' })} aria-label={`Rejeter ${c.nom}`} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-gris-300 font-courant text-[15px] font-semibold text-erreur transition-colors duration-rapide hover:bg-erreur-fond">
                         <UserX size={16} aria-hidden="true" />
                       </button>
                     </span>
@@ -150,6 +220,15 @@ export default function Recrutement() {
           </Card>
         ))}
       </div>
+      )}
+
+      {decision && (
+        <ModaleDecision
+          candidat={decision.candidat}
+          decision={decision.statut}
+          onFermer={() => setDecision(null)}
+          onConfirmer={statuer}
+        />
       )}
     </div>
   );

@@ -6,6 +6,7 @@ from .views import (CandidatureWebhookView, EmployeeViewSet, LeaveViewSet, Point
                     RapportMensuelView, RapportPdfView, TentativeViewSet)
 from .models import Candidature
 from rest_framework import serializers, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -15,6 +16,22 @@ class CandidatureSerializer(serializers.ModelSerializer):
         model = Candidature
         fields = ["id", "offre_reference", "offre_titre", "nom", "email", "telephone",
                   "message", "cv_url", "source", "statut", "cree_le"]
+        # Le statut ne change que via statuer/ (transition contrôlée + mail candidat).
+        read_only_fields = ["statut"]
+
+
+# Réception -> examen -> entretien -> décision finale. Chaque transition notifie le candidat.
+TRANSITIONS = {
+    "recue": ("entretien", "rejetee"),
+    "entretien": ("retenue", "rejetee"),
+    "rejetee": ("recue",),
+    "retenue": (),
+}
+TEMPLATE_PAR_DECISION = {
+    "entretien": "candidature_entretien",
+    "retenue": "candidature_retenue",
+    "rejetee": "candidature_rejetee",
+}
 
 
 class CandidatureViewSet(viewsets.ModelViewSet):
@@ -31,6 +48,32 @@ class CandidatureViewSet(viewsets.ModelViewSet):
         if obj.statut not in ("recue", "rejetee"):
             return Response({"detail": "Seule une candidature reçue ou rejetée peut être supprimée."}, status=400)
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"])
+    def statuer(self, request, pk=None):
+        """Fait avancer le dossier : examen -> entretien -> décision, mail auto au candidat."""
+        if request.user.role not in ("super_admin", "admin", "chef_rh"):
+            return Response({"detail": "Décision réservée à la RH."}, status=403)
+        cand = self.get_object()
+        decision = (request.data.get("decision") or "").strip()
+        message = (request.data.get("message") or "").strip()
+        if decision not in ("entretien", "retenue", "rejetee"):
+            return Response({"detail": "decision: entretien | retenue | rejetee."}, status=400)
+        if decision not in TRANSITIONS.get(cand.statut, ()):
+            return Response({"detail": f"Transition {cand.statut} -> {decision} impossible."}, status=400)
+        if decision == "rejetee" and not message:
+            return Response({"detail": "Motif du rejet obligatoire (envoyé au candidat)."}, status=400)
+        cand.statut = decision
+        cand.save(update_fields=["statut"])
+        from apps.mailing.services import send_templated_mail
+
+        send_templated_mail(
+            TEMPLATE_PAR_DECISION[decision], cand.email,
+            {"nom": cand.nom, "poste": cand.offre_titre or cand.offre_reference,
+             "message": message or "—"},
+            department_slug="rh",
+        )
+        return Response(CandidatureSerializer(cand).data)
 
 
 router = DefaultRouter()
