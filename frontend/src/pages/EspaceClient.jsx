@@ -641,6 +641,7 @@ export default function EspaceClient() {
   if (docDevis) {
     const doc = {
       numero: docDevis.numero, objet: docDevis.objet, client: client.societe,
+      espaceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
       date: dateFr(new Date().toISOString()), validite: docDevis.validite, statut: docDevis.statut,
       lignes: (docDevis.lignes ?? []).map((l) => ({ description: l.description, quantite: Number(l.quantite), montant: Number(l.montant) })),
     };

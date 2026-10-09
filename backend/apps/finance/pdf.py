@@ -338,6 +338,8 @@ def _client_lignes(client, extra=None):
 
 
 def pdf_devis(devis):
+    from django.conf import settings
+
     doc, story, buf, normal, soc, gras, droite, droite_gras = _base("Devis", devis.numero or "—")
     st = {"normal": normal, "gras": gras, "droite": droite, "droite_gras": droite_gras}
     lignes = list(devis.lignes.all())
@@ -355,7 +357,13 @@ def pdf_devis(devis):
     story.append(_table_lignes(st, lignes, TAUX_TVA))
     story.append(Spacer(1, 3 * mm))
     story.append(_totaux(st, ttc, TAUX_TVA))
-    qr_valeur = f"https://app.digicom.ml/d/{devis.numero}?client={devis.client.nom_societe}&montant={ttc:g}"
+    # QR « Suivi du devis » : espace client vivant (/espace/:slug/:code),
+    # construit depuis FRONTEND_URL (hub.digicom.ml en prod). L'ancienne URL
+    # app.digicom.ml/d/… est morte (mauvais domaine, route inexistante).
+    base = (getattr(settings, "FRONTEND_URL", "") or "https://hub.digicom.ml").rstrip("/")
+    slug = (getattr(devis.client, "slug", "") or "").strip()
+    code = (getattr(devis.client, "code", "") or "").strip()
+    qr_valeur = f"{base}/espace/{slug}/{code}" if slug and code else f"{base}/espace"
     qr = _qr_image(qr_valeur)
     suivi = _qr_bloc(normal, qr, "Suivi du devis", qr_valeur)
     story += _pied(normal, soc, suivi=suivi)

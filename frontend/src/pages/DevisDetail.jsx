@@ -30,6 +30,7 @@ export default function DevisDetail() {
   const [devis, setDevis] = useState(null);
   const [nomClient, setNomClient] = useState('');
   const [emailClient, setEmailClient] = useState('');
+  const [espaceUrl, setEspaceUrl] = useState('');
   const [introuvable, setIntrouvable] = useState(false);
 
   const charger = async () => {
@@ -43,6 +44,9 @@ export default function DevisDetail() {
         const cli = liste.find((c) => c.id === trouve.client);
         setNomClient(trouve.client_nom ?? cli?.nom_societe ?? '');
         setEmailClient(trouve.client_email ?? cli?.email ?? '');
+        setEspaceUrl(cli?.slug
+          ? `${window.location.origin}/espace/${cli.slug}${cli.code ? `/${cli.code}` : ''}`
+          : '');
       }
     } catch (e) {
       notifier({ type: 'info', titre: 'Chargement impossible', texte: messageErreur(e) });
@@ -122,6 +126,7 @@ export default function DevisDetail() {
     objet: devis.objet,
     client: nomClient,
     clientEmail: emailClient,
+    espaceUrl: espaceUrl || undefined,
     date: dateFr(devis.cree_le),
     validite: dateFr(devis.validite),
     statut: STATUT_LABEL[devis.statut] ?? devis.statut,

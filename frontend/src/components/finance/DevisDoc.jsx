@@ -7,7 +7,10 @@ import { fCFA } from '../../utils/stats.js';
 
 export default function DevisDoc({ devis, entreprise }) {
   const total = devis.lignes.reduce((s, l) => s + l.montant * l.quantite, 0);
-  const qrValeur = `https://app.digicom.ml/d/${devis.numero}?client=${encodeURIComponent(devis.client)}&montant=${total}`;
+  // QR « Suivi du devis » : espace client vivant. L'ancienne URL
+  // app.digicom.ml/d/… est morte (mauvais domaine, route inexistante).
+  const origine = typeof window !== 'undefined' ? window.location.origin : '';
+  const qrValeur = devis.espaceUrl || `${origine}/espace`;
 
   return (
     <div className="dg-print-doc mx-auto w-full max-w-[800px] overflow-hidden rounded-lg border border-gris-300 bg-gris-0 shadow-ombre-1">
@@ -85,7 +88,7 @@ export default function DevisDoc({ devis, entreprise }) {
         <div className="min-w-0 max-w-[280px]">
           <p className="font-courant text-[15px] font-semibold text-gris-900">Suivi du devis</p>
           <p className="mt-esp-1 break-all font-mono text-[13px] text-gris-600">{qrValeur}</p>
-          <p className="dg-legende mt-esp-2">Scannez pour tracer ce devis.</p>
+          <p className="dg-legende mt-esp-2">Scannez pour ouvrir l espace client.</p>
         </div>
         <div className="ml-auto flex items-end gap-esp-5">
           <Cachet entreprise={entreprise} cachetUrl={entreprise.cachetFinance} signatureUrl={entreprise.signatureFinance} />
