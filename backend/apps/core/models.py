@@ -77,16 +77,27 @@ class DirectMessage(models.Model):
 
 
 class SiteSettings(models.Model):
-    """Paramètres société (singleton id=1) — repris sur factures/reçus (SPEC §5.1)."""
+    """Paramètres société (singleton id=1) — repris sur factures/reçus (SPEC §5.1).
 
-    raison = models.CharField(max_length=255, default="Digi Com & Technologies")
-    nif = models.CharField(max_length=50, default="081234567A")
-    rccm = models.CharField(max_length=50, default="ML-BKO-2021-B-1234")
-    adresse = models.CharField(max_length=255, default="Sotuba ACI-2000, Bamako")
-    phone = models.CharField(max_length=50, default="(+223) 70 16 33 86")
-    email = models.EmailField(default="contact@digicom.ml")
-    delai_paiement = models.CharField(max_length=50, default="30 jours")
-    signataire = models.CharField(max_length=100, default="La Direction Financière")
+    Tous les champs texte acceptent le vide (blank=True) : la société peut
+    vider NIF, RCCM, pied de page, etc. depuis /parametres."""
+
+    raison = models.CharField(max_length=255, default="Digi Com & Technologies", blank=True)
+    nif = models.CharField(max_length=50, default="081234567A", blank=True)
+    rccm = models.CharField(max_length=50, default="ML-BKO-2021-B-1234", blank=True)
+    adresse = models.CharField(max_length=255, default="Sotuba ACI-2000, Bamako", blank=True)
+    phone = models.CharField(max_length=50, default="(+223) 70 16 33 86", blank=True)
+    email = models.EmailField(default="contact@digicom.ml", blank=True)
+    delai_paiement = models.CharField(max_length=50, default="30 jours", blank=True)
+    signataire = models.CharField(max_length=100, default="La Direction Financière", blank=True)
+    devise = models.CharField(max_length=20, default="F CFA", blank=True)
+    taux_tva = models.IntegerField(default=0, help_text="TVA société en % (0 par défaut : pas de TVA au Mali).")
+    conditions = models.TextField(
+        default="Paiement à 30 jours date de facture. Passé ce délai, pénalités de 1,5 % par mois de retard.",
+        blank=True)
+    pied = models.TextField(
+        default="Digi Com & Technologies — NIF 081234567A — RCCM ML-BKO-2021-B-1234 — Merci de votre confiance.",
+        blank=True)
     # Tampons société : finance (factures/devis/reçus) + juridique (contrats/litiges),
     # chacun avec sa signature superposée dans le design. Secrétariat : cachet seul
     # (courriers signés à la main après impression, pas de signature importée).

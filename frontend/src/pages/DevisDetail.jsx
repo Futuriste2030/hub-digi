@@ -19,7 +19,8 @@ const STATUT_LABEL = { en_attente: 'En attente', accepte: 'Accepté', refuse: 'R
 const numeroDevis = (d) => d.numero ?? `DEV-${String(d.id).padStart(4, '0')}`;
 const dateFr = (iso) => {
   if (!iso) return '—';
-  const [a, m, j] = String(iso).split('-');
+  // cree_le est un datetime ISO (…T…Z) : ne garder que la partie date.
+  const [a, m, j] = String(iso).split('T')[0].split('-');
   return a && m && j ? `${j}/${m}/${a}` : String(iso);
 };
 

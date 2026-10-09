@@ -223,6 +223,7 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteSettings
         fields = ["raison", "nif", "rccm", "adresse", "phone", "email", "delai_paiement", "signataire",
+                  "devise", "taux_tva", "conditions", "pied",
                   "cachet_finance", "signature_finance", "cachet_juridique", "signature_juridique",
                   "cachet_secretariat"]
 

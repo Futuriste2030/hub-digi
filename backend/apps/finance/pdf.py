@@ -122,6 +122,8 @@ def _societe():
             "raison": s.raison, "nif": s.nif, "rccm": s.rccm, "adresse": s.adresse,
             "phone": s.phone, "email": s.email, "delai": s.delai_paiement,
             "signataire": s.signataire,
+            "conditions": getattr(s, "conditions", "") or CONDITIONS,
+            "pied": getattr(s, "pied", "") or PIED,
         }
     except Exception:
         return {
@@ -129,6 +131,7 @@ def _societe():
             "rccm": "ML-BKO-2021-B-1234", "adresse": "Sotuba ACI-2000, Bamako",
             "phone": "(+223) 70 16 33 86", "email": "contact@digicom.ml",
             "delai": "30 jours", "signataire": "La Direction Financière",
+            "conditions": CONDITIONS, "pied": PIED,
         }
 
 
@@ -287,10 +290,10 @@ def _pied(normal, soc, suivi=None):
         fin = [bas]
     else:
         fin = [signature]
+    # Pied = texte saisi dans /parametres (comme l'écran), repli constante.
+    # Le pied par défaut reprend déjà raison + NIF + RCCM : pas de doublon.
     bandeau = Table([[
-        Paragraph(
-            f"<font size=8 color='#32425b'>{propre(soc['raison'])} — NIF {propre(soc['nif'])} — "
-            f"RCCM {propre(soc['rccm'])} — {propre(PIED)}</font>", normal),
+        Paragraph(f"<font size=8 color='#32425b'>{propre(soc.get('pied') or PIED)}</font>", normal),
     ]], colWidths=[182 * mm])
     bandeau.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), GRIS_FOND),
@@ -303,7 +306,7 @@ def _pied(normal, soc, suivi=None):
     ]))
     return [
         Spacer(1, 4 * mm),
-        Paragraph(propre(CONDITIONS), normal),
+        Paragraph(propre(soc.get("conditions") or CONDITIONS), normal),
         Spacer(1, 4 * mm),
         *fin,
         Spacer(1, 4 * mm),

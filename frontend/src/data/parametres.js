@@ -46,6 +46,10 @@ const versCache = (apiData) => ({
   email: apiData.email ?? DEFAUT.email,
   delaiPaiement: apiData.delai_paiement ?? DEFAUT.delaiPaiement,
   signataire: apiData.signataire ?? DEFAUT.signataire,
+  devise: apiData.devise ?? DEFAUT.devise,
+  tauxTva: apiData.taux_tva ?? DEFAUT.tauxTva,
+  conditions: apiData.conditions ?? DEFAUT.conditions,
+  pied: apiData.pied ?? DEFAUT.pied,
   cachetFinance: urlAbsolue(apiData.cachet_finance),
   signatureFinance: urlAbsolue(apiData.signature_finance),
   cachetJuridique: urlAbsolue(apiData.cachet_juridique),
@@ -62,6 +66,8 @@ const CHAMPS_FICHIER = {
 const versApi = (v) => ({
   raison: v.raison, nif: v.nif, rccm: v.rccm, adresse: v.adresse, phone: v.phone,
   email: v.email, delai_paiement: v.delaiPaiement, signataire: v.signataire,
+  devise: v.devise, taux_tva: Number(v.tauxTva) || 0,
+  conditions: v.conditions, pied: v.pied,
 });
 
 function memoriser(cache) {
