@@ -11,6 +11,11 @@ export default function DevisDoc({ devis, entreprise }) {
   // app.digicom.ml/d/… est morte (mauvais domaine, route inexistante).
   const origine = typeof window !== 'undefined' ? window.location.origin : '';
   const qrValeur = devis.espaceUrl || `${origine}/espace`;
+  // NIF/RCCM affichés uniquement s'ils sont renseignés dans /parametres.
+  const identifiants = [
+    String(entreprise.nif ?? '').trim() && `NIF ${String(entreprise.nif).trim()}`,
+    String(entreprise.rccm ?? '').trim() && `RCCM ${String(entreprise.rccm).trim()}`,
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className="dg-print-doc mx-auto w-full max-w-[800px] overflow-hidden rounded-lg border border-gris-300 bg-gris-0 shadow-ombre-1">
@@ -19,7 +24,9 @@ export default function DevisDoc({ devis, entreprise }) {
           <Logo hauteur={48} />
           <span>
             <span className="block font-titrage text-[15px] font-extrabold tracking-[0.06em] text-blanc">{entreprise.raison}</span>
-            <span className="block font-courant text-[13px] text-digi-brume">NIF {entreprise.nif} · RCCM {entreprise.rccm}</span>
+            {identifiants !== '' && (
+              <span className="block font-courant text-[13px] text-digi-brume">{identifiants}</span>
+            )}
           </span>
         </span>
         <span className="text-right">

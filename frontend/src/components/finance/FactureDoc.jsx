@@ -12,6 +12,11 @@ export default function FactureDoc({ facture, entreprise }) {
   const barcodeRef = useRef(null);
   const estProforma = (facture.typeDoc ?? facture.type_doc ?? 'facture') === 'proforma';
   const titreDoc = estProforma ? 'Facture Proforma' : 'Facture';
+  // NIF/RCCM affichés uniquement s'ils sont renseignés dans /parametres.
+  const identifiants = [
+    String(entreprise.nif ?? '').trim() && `NIF ${String(entreprise.nif).trim()}`,
+    String(entreprise.rccm ?? '').trim() && `RCCM ${String(entreprise.rccm).trim()}`,
+  ].filter(Boolean).join(' · ');
 
   useEffect(() => {
     if (barcodeRef.current) {
@@ -43,7 +48,9 @@ export default function FactureDoc({ facture, entreprise }) {
           <Logo hauteur={48} />
           <span>
             <span className="block font-titrage text-[15px] font-extrabold tracking-[0.06em] text-blanc">{entreprise.raison}</span>
-            <span className="block font-courant text-[13px] text-digi-brume">NIF {entreprise.nif} · RCCM {entreprise.rccm}</span>
+            {identifiants !== '' && (
+              <span className="block font-courant text-[13px] text-digi-brume">{identifiants}</span>
+            )}
           </span>
         </span>
         <span className="text-right">

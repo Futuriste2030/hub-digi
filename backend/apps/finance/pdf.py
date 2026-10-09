@@ -179,18 +179,28 @@ def _base(titre_doc, numero):
     droite_doc = (
         f"<font color='#4fa3dc' size=8><b>{propre(titre_doc).upper()}</b></font>"
         f"<br/><font color='#ffffff' size=11><b>{propre(numero)}</b></font>")
-    bandeau = Table([
+    # NIF/RCCM affichés uniquement s'ils sont renseignés dans /parametres.
+    morceaux = []
+    if str(soc.get("nif") or "").strip():
+        morceaux.append(f"NIF {str(soc['nif']).strip()}")
+    if str(soc.get("rccm") or "").strip():
+        morceaux.append(f"RCCM {str(soc['rccm']).strip()}")
+    lignes_bandeau = [
         [_logo(), Paragraph(droite_doc, blanc_num)],
         [Paragraph(f"<b>{propre(soc['raison'])}</b>", blanc_titre),
          Paragraph("", blanc)],
-        [Paragraph(f"NIF {propre(soc['nif'])} · RCCM {propre(soc['rccm'])}", sous_titre),
-         Paragraph("", blanc)],
-    ], colWidths=[110 * mm, 72 * mm])
+    ]
+    if morceaux:
+        lignes_bandeau.append(
+            [Paragraph(propre(" · ".join(morceaux)), sous_titre),
+             Paragraph("", blanc)])
+    derniere = len(lignes_bandeau) - 1
+    bandeau = Table(lignes_bandeau, colWidths=[110 * mm, 72 * mm])
     bandeau.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), MARINE),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("SPAN", (1, 0), (1, 2)),
-        ("VALIGN", (1, 0), (1, 2), "MIDDLE"),
+        ("SPAN", (1, 0), (1, derniere)),
+        ("VALIGN", (1, 0), (1, derniere), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ("RIGHTPADDING", (0, 0), (-1, -1), 10),
         ("TOPPADDING", (0, 0), (-1, -1), 3),
