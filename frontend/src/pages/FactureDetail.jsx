@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, Link2, Banknote, Send } from 'lucide-react';
+import { ArrowLeft, Printer, Link2, Banknote, Send, BadgeCheck, Bell } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import FactureDoc from '../components/finance/FactureDoc.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_FINANCE, ROLES_CHEF_FINANCE, peutVoir } from '../lib/acces.js';
-import { envoyerFacture, listerFactures, majFacture, payerFacture, telechargerPdf } from '../api/finance.js';
+import { envoyerFacture, listerFactures, majFacture, payerFacture, relancerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
 import { messageErreur } from '../api/client.js';
 import { getEntreprise } from '../data/parametres.js';
 import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
@@ -73,6 +73,26 @@ export default function FactureDetail() {
       charger();
     } catch (e) {
       notifier({ type: 'info', titre: 'Envoi impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const valider = async () => {
+    try {
+      await validerFacture(facture.id);
+      notifier({ type: 'succes', titre: 'Facture validée', texte: `${facture.numero} — prête à envoyer.` });
+      charger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Validation impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const relancer = async () => {
+    try {
+      await relancerFacture(facture.id);
+      notifier({ type: 'succes', titre: 'Facture relancée', texte: `${facture.numero} — passée en Impayée, mail de relance transmis.` });
+      charger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Relance impossible', texte: messageErreur(e) });
     }
   };
 
@@ -173,9 +193,21 @@ export default function FactureDetail() {
               <Banknote size={20} aria-hidden="true" /> Marquer payée
             </Button>
           )}
-          <Button variante="fantome" onClick={envoyer}>
-            <Send size={20} aria-hidden="true" /> Envoyer par mail
-          </Button>
+          {peutValider && facture.statut === 'brouillon' && (
+            <Button variante="secondaire" onClick={valider} title="Brouillon → validée (contrôle interne, invisible du client)">
+              <BadgeCheck size={20} aria-hidden="true" /> Valider
+            </Button>
+          )}
+          {facture.statut === 'validee' && (
+            <Button variante="fantome" onClick={envoyer} title="Validée → envoyée (visible espace client + mail + PDF)">
+              <Send size={20} aria-hidden="true" /> Envoyer par mail
+            </Button>
+          )}
+          {(facture.statut === 'envoyee' || facture.statut === 'partielle') && Number(facture.solde ?? 0) > 0 && (
+            <Button variante="fantome" onClick={relancer} title="Passe en Impayée + mail de relance">
+              <Bell size={20} aria-hidden="true" /> Relancer
+            </Button>
+          )}
         </div>
       </div>
 

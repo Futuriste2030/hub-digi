@@ -20,6 +20,8 @@ export const listerFactures = (params) => toutLister('/finance/invoices/', param
 export const detailFacture = (id) => get(`/finance/invoices/${id}/`);
 export const creerFacture = (payload) => post('/finance/invoices/', payload);
 export const majFacture = (id, payload) => patch(`/finance/invoices/${id}/`, payload);
+export const validerFacture = (id) => post(`/finance/invoices/${id}/valider/`, {});
+export const relancerFacture = (id) => post(`/finance/invoices/${id}/relancer/`, {});
 export const payerFacture = (id, payload) => post(`/finance/invoices/${id}/payer/`, payload);
 export const envoyerFacture = (id) => post(`/finance/invoices/${id}/envoyer/`, {});
 export const pdfFacture = (id) => `/finance/invoices/${id}/pdf/`;

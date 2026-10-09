@@ -49,7 +49,9 @@ class DashboardClientView(APIView):
         from apps.secretariat_tickets.models import Ticket
         from apps.secretariat_tickets.views import TicketSerializer
 
-        factures = Invoice.objects.filter(client_id=client_id).prefetch_related("lignes", "recus")
+        factures = Invoice.objects.filter(client_id=client_id).exclude(
+            statut__in=[Invoice.STATUT_BROUILLON, Invoice.STATUT_VALIDEE]
+        ).prefetch_related("lignes", "recus")
         return Response(
             {
                 "client": ClientSerializer(client).data if client else None,

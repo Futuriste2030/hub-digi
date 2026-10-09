@@ -47,6 +47,8 @@ class InvoiceSerializer(serializers.ModelSerializer):
     paye = serializers.ReadOnlyField()
     solde = serializers.ReadOnlyField()
     lignes = LigneSerializer(many=True, required=False)
+    # Case « Envoyer immédiatement » de la modale : crée + envoie d'un coup.
+    envoyer_immediat = serializers.BooleanField(write_only=True, required=False, default=False)
     client_nom = serializers.SerializerMethodField()
     client_email = serializers.SerializerMethodField()
     client_adresse = serializers.SerializerMethodField()
@@ -59,7 +61,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = ["id", "client", "inscription", "client_nom", "client_email", "client_adresse",
                   "client_phone", "formation_titre", "project", "project_titre", "numero",
                   "type_doc", "tva_active", "statut", "envoyee_le", "total", "paye", "solde",
-                  "lignes", "cree_le"]
+                  "lignes", "envoyer_immediat", "cree_le"]
         read_only_fields = ["numero", "envoyee_le"]
 
     def get_client_nom(self, obj):
@@ -76,10 +78,15 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lignes = validated_data.pop("lignes", [])
+        envoyer_immediat = validated_data.pop("envoyer_immediat", False)
         invoice = Invoice(**validated_data)
         invoice.save()  # génère FACTURE-SLUGCLIENT-JJ-MM-AAAA-ID
         for l in lignes:
             InvoiceLigne.objects.create(invoice=invoice, **l)
+        # Envoi immédiat : la facture part directement dans l'espace client.
+        # Factures formations (client NULL) : restent brouillon (WhatsApp).
+        if envoyer_immediat and invoice.client_id is not None:
+            invoice = _passer_envoyee(invoice)
         return invoice
 
 
@@ -117,11 +124,15 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
 
 class FinanceScopeMixin:
+    # Statuts internes jamais visibles côté client : une facture n'apparaît
+    # dans l'espace qu'une fois envoyée (brouillon/validee = internes).
+    STATUTS_INTERNES = [Invoice.STATUT_BROUILLON, Invoice.STATUT_VALIDEE]
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
         if user.role == "client" and user.client_id:
-            return qs.filter(client_id=user.client_id)
+            return qs.filter(client_id=user.client_id).exclude(statut__in=self.STATUTS_INTERNES)
         client_id = self.request.query_params.get("client_id")
         if client_id and hasattr(self.queryset.model, "client"):
             qs = qs.filter(client_id=client_id)
@@ -169,6 +180,38 @@ class DevisViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+def _passer_envoyee(invoice):
+    """Chaîne brouillon -> validée -> envoyée (+ envoyee_le) + mail
+    facture_disponible avec lien espace client.
+
+    Les statuts au-delà (partielle/payée/impayée) sont conservés : seul le
+    mail est renvoyé (renvoi)."""
+    from django.utils import timezone
+
+    if invoice.statut == Invoice.STATUT_BROUILLON:
+        invoice.statut = Invoice.STATUT_VALIDEE
+    if invoice.statut == Invoice.STATUT_VALIDEE:
+        invoice.statut = Invoice.STATUT_ENVOYEE
+    if invoice.envoyee_le is None and invoice.statut == Invoice.STATUT_ENVOYEE:
+        invoice.envoyee_le = timezone.now()
+    invoice.save()
+    from django.conf import settings
+
+    from apps.mailing.services import send_templated_mail
+
+    url_espace = f"{settings.FRONTEND_URL}/espace"
+    if invoice.client.slug and invoice.client.code:
+        url_espace = f"{url_espace}/{invoice.client.slug}/{invoice.client.code}"
+    send_templated_mail(
+        "facture_disponible", invoice.client.email,
+        {"societe": invoice.client.nom_societe, "numero": invoice.numero,
+         "total": f"{float(invoice.total):,.0f}".replace(",", " "),
+         "espace_url": url_espace},
+        department_slug="finance", client=invoice.client,
+    )
+    return invoice
+
+
 class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
     queryset = Invoice.objects.select_related("client", "inscription__formation",
                                               "inscription__participant").prefetch_related("lignes", "recus").all()
@@ -181,6 +224,38 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
     def pdf(self, request, pk=None):
         invoice = self.get_object()
         return FileResponse(pdf_facture(invoice), as_attachment=True, filename=f"{invoice.numero}.pdf")
+
+    @action(detail=True, methods=["post"])
+    def valider(self, request, pk=None):
+        """Contrôle interne : brouillon -> validée (prête à envoyer)."""
+        invoice = self.get_object()
+        if invoice.statut != Invoice.STATUT_BROUILLON:
+            return Response({"detail": "Seule une facture brouillon peut être validée."}, status=400)
+        invoice.statut = Invoice.STATUT_VALIDEE
+        invoice.save()
+        return Response(InvoiceSerializer(invoice).data)
+
+    @action(detail=True, methods=["post"])
+    def relancer(self, request, pk=None):
+        """Relance manuelle : envoyée/partielle non soldée -> impayée + mail
+        relance_facture (le Beat auto n'étant pas actif)."""
+        from apps.mailing.services import send_templated_mail
+
+        invoice = self.get_object()
+        if invoice.statut not in (Invoice.STATUT_ENVOYEE, Invoice.STATUT_PARTIELLE):
+            return Response({"detail": "Relance réservée aux factures envoyées non soldées."}, status=400)
+        invoice = Invoice.objects.prefetch_related("lignes", "recus").get(id=invoice.id)
+        if invoice.solde <= 0:
+            return Response({"detail": "Facture déjà soldée."}, status=400)
+        invoice.statut = Invoice.STATUT_IMPAYEE
+        invoice.save()
+        send_templated_mail(
+            "relance_facture", invoice.destinataire_email,
+            {"societe": invoice.destinataire_nom, "numero": invoice.numero,
+             "solde": f"{float(invoice.solde):,.0f}".replace(",", " ")},
+            department_slug="finance", client=invoice.client,
+        )
+        return Response(InvoiceSerializer(invoice).data)
 
     @action(detail=True, methods=["post"])
     def payer(self, request, pk=None):
@@ -224,7 +299,7 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
         telephone = telephone_whatsapp(invoice.destinataire_phone)
         if not telephone:
             return Response({"detail": "Téléphone participant manquant."}, status=400)
-        if invoice.statut == Invoice.STATUT_BROUILLON:
+        if invoice.statut in (Invoice.STATUT_BROUILLON, Invoice.STATUT_VALIDEE):
             from django.utils import timezone
 
             invoice.statut = Invoice.STATUT_ENVOYEE
@@ -239,31 +314,14 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def envoyer(self, request, pk=None):
+        """Validée -> envoyée (+ mail facture_disponible). Au-delà, renvoi
+        du mail sans toucher au statut. Brouillon refusé : validez d'abord."""
         invoice = self.get_object()
         if invoice.client_id is None:
             return Response({"detail": "Facture formation : utilisez l'envoi WhatsApp."}, status=400)
         if invoice.statut == Invoice.STATUT_BROUILLON:
-            invoice.statut = Invoice.STATUT_VALIDEE
-        invoice.statut = Invoice.STATUT_ENVOYEE if invoice.statut == Invoice.STATUT_VALIDEE else invoice.statut
-        if invoice.envoyee_le is None and invoice.statut == Invoice.STATUT_ENVOYEE:
-            from django.utils import timezone
-
-            invoice.envoyee_le = timezone.now()
-        invoice.save()
-        from django.conf import settings
-
-        from apps.mailing.services import send_templated_mail
-
-        url_espace = f"{settings.FRONTEND_URL}/espace"
-        if invoice.client.slug and invoice.client.code:
-            url_espace = f"{url_espace}/{invoice.client.slug}/{invoice.client.code}"
-        send_templated_mail(
-            "facture_disponible", invoice.client.email,
-            {"societe": invoice.client.nom_societe, "numero": invoice.numero,
-             "total": f"{float(invoice.total):,.0f}".replace(",", " "),
-             "espace_url": url_espace},
-            department_slug="finance", client=invoice.client,
-        )
+            return Response({"detail": "Validez la facture avant de l'envoyer."}, status=400)
+        invoice = _passer_envoyee(invoice)
         return Response(InvoiceSerializer(invoice).data)
 
 

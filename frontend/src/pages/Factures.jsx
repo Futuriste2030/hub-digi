@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { Search, ArrowRight, Link2, Banknote, Printer, Plus, X, Mail } from 'lucide-react';
+import { Search, ArrowRight, Link2, Banknote, Printer, Plus, X, Mail, BadgeCheck, Bell } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import { Card, CardBody } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
@@ -8,7 +8,7 @@ import { Label, Input } from '../components/ui/Input.jsx';
 import EditeurLignes from '../components/finance/EditeurLignes.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_FINANCE, ROLES_CHEF_FINANCE, peutVoir } from '../lib/acces.js';
-import { creerFacture, envoyerFacture, listerFactures, payerFacture, telechargerPdf } from '../api/finance.js';
+import { creerFacture, envoyerFacture, listerFactures, payerFacture, relancerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
 import { listerClients } from '../api/clients.js';
 import { messageErreur } from '../api/client.js';
 import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
@@ -41,6 +41,7 @@ const MOYENS = [
 function ModaleFacture({ clients, onFermer, onCreer }) {
   const [clientId, setClientId] = useState(clients[0]?.id ?? '');
   const [typeDoc, setTypeDoc] = useState('facture');
+  const [envoiImmediat, setEnvoiImmediat] = useState(true);
   const [lignes, setLignes] = useState([{ description: '', quantite: 1, montant: '' }]);
   const [tvaActive, setTvaActive] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -58,7 +59,7 @@ function ModaleFacture({ clients, onFermer, onCreer }) {
       setErreur('Choisissez le client facturé.');
       return;
     }
-    onCreer({ client: Number(clientId), type_doc: typeDoc, lignes: utiles, tva_active: tvaActive });
+    onCreer({ client: Number(clientId), type_doc: typeDoc, lignes: utiles, tva_active: tvaActive, envoyer_immediat: envoiImmediat });
   };
 
   return (
@@ -96,6 +97,10 @@ function ModaleFacture({ clients, onFermer, onCreer }) {
           <label className="flex min-h-[44px] cursor-pointer items-center gap-esp-3 rounded-md border border-gris-300 bg-gris-100 px-esp-4">
             <input type="checkbox" checked={tvaActive} onChange={(e) => setTvaActive(e.target.checked)} className="h-5 w-5 accent-[#0a3d91]" />
             <span className="font-courant text-[15px] font-semibold text-gris-900">Activer la TVA 18 % <span className="font-normal text-gris-600">— désactivée par défaut (pas de TVA au Mali)</span></span>
+          </label>
+          <label className="flex min-h-[44px] cursor-pointer items-center gap-esp-3 rounded-md border border-gris-300 bg-gris-100 px-esp-4">
+            <input type="checkbox" checked={envoiImmediat} onChange={(e) => setEnvoiImmediat(e.target.checked)} className="h-5 w-5 accent-[#0a3d91]" />
+            <span className="font-courant text-[15px] font-semibold text-gris-900">Envoyer immédiatement <span className="font-normal text-gris-600">— passe en Envoyée : visible dans l espace client + mail avec PDF</span></span>
           </label>
           {erreur && <p role="alert" className="font-courant text-[15px] text-erreur">{erreur}</p>}
         </div>
@@ -206,7 +211,9 @@ export default function Factures() {
     try {
       const f = await creerFacture(data);
       setModale(false);
-      notifier({ type: 'succes', titre: `${TYPE_DOC_LABEL[data.type_doc] ?? 'Facture'} créée`, texte: `${f.numero} — statut Brouillon.` });
+      notifier(f.statut === 'envoyee'
+        ? { type: 'succes', titre: `${TYPE_DOC_LABEL[data.type_doc] ?? 'Facture'} envoyée`, texte: `${f.numero} — visible dans l'espace client, mail avec PDF transmis.` }
+        : { type: 'succes', titre: `${TYPE_DOC_LABEL[data.type_doc] ?? 'Facture'} créée`, texte: `${f.numero} — statut Brouillon (invisible du client).` });
       charger(recherche.trim(), statut, typeFiltre);
     } catch (e) {
       notifier({ type: 'info', titre: 'Création impossible', texte: messageErreur(e) });
@@ -244,6 +251,26 @@ export default function Factures() {
       charger(recherche.trim(), statut, typeFiltre);
     } catch (e) {
       notifier({ type: 'info', titre: 'Envoi impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const valider = async (f) => {
+    try {
+      await validerFacture(f.id);
+      notifier({ type: 'succes', titre: 'Facture validée', texte: `${f.numero} — prête à envoyer (toujours invisible du client).` });
+      charger(recherche.trim(), statut, typeFiltre);
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Validation impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const relancer = async (f) => {
+    try {
+      await relancerFacture(f.id);
+      notifier({ type: 'succes', titre: 'Facture relancée', texte: `${f.numero} — passée en Impayée, mail de relance transmis.` });
+      charger(recherche.trim(), statut, typeFiltre);
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Relance impossible', texte: messageErreur(e) });
     }
   };
 
@@ -327,11 +354,23 @@ export default function Factures() {
                           <Banknote size={20} aria-hidden="true" />
                         </button>
                       )}
+                      {peutValider && f.statut === 'brouillon' && (
+                        <button type="button" onClick={() => valider(f)} aria-label={`Valider ${f.numero}`} title="Valider (brouillon → validée, interne)" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-succes hover:bg-succes-fond">
+                          <BadgeCheck size={20} aria-hidden="true" />
+                        </button>
+                      )}
+                      {f.statut === 'validee' && (
+                        <button type="button" onClick={() => envoyer(f)} aria-label={`Envoyer ${f.numero} par mail`} title="Envoyer : validée → envoyée (visible espace client + mail + PDF)" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-digi-texte hover:bg-digi-voile">
+                          <Mail size={20} aria-hidden="true" />
+                        </button>
+                      )}
+                      {(f.statut === 'envoyee' || f.statut === 'partielle') && Number(f.solde ?? 0) > 0 && (
+                        <button type="button" onClick={() => relancer(f)} aria-label={`Relancer ${f.numero}`} title="Relancer : passe en Impayée + mail de relance" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-alerte hover:bg-alerte-fond">
+                          <Bell size={20} aria-hidden="true" />
+                        </button>
+                      )}
                       <button type="button" onClick={() => telechargerPdf(`/finance/invoices/${f.id}/pdf/`, `${f.numero}.pdf`)} aria-label={`PDF ${f.numero}`} title="Télécharger le PDF" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200">
                         <Printer size={20} aria-hidden="true" />
-                      </button>
-                      <button type="button" onClick={() => envoyer(f)} aria-label={`Envoyer ${f.numero} par mail`} title="Envoyer le template + PDF en pièce jointe" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-digi-texte hover:bg-digi-voile">
-                        <Mail size={20} aria-hidden="true" />
                       </button>
                     </span>
                   </td>
