@@ -27,6 +27,11 @@ const STATUTS = [
 ];
 const STATUT_LABEL = Object.fromEntries(STATUTS.map((s) => [s.id, s.label]));
 const STATUT_TON = { brouillon: 'neutre', validee: 'info', envoyee: 'info', partielle: 'alerte', payee: 'succes', impayee: 'erreur' };
+const TYPES_DOC = [
+  { id: 'facture', label: 'Facture' },
+  { id: 'proforma', label: 'Proforma' },
+];
+const TYPE_DOC_LABEL = Object.fromEntries(TYPES_DOC.map((t) => [t.id, t.label]));
 const MOYENS = [
   { id: 'especes', label: 'Espèces' },
   { id: 'virement', label: 'Virement' },
@@ -35,6 +40,7 @@ const MOYENS = [
 
 function ModaleFacture({ clients, onFermer, onCreer }) {
   const [clientId, setClientId] = useState(clients[0]?.id ?? '');
+  const [typeDoc, setTypeDoc] = useState('facture');
   const [lignes, setLignes] = useState([{ description: '', quantite: 1, montant: '' }]);
   const [tvaActive, setTvaActive] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -52,7 +58,7 @@ function ModaleFacture({ clients, onFermer, onCreer }) {
       setErreur('Choisissez le client facturé.');
       return;
     }
-    onCreer({ client: Number(clientId), lignes: utiles, tva_active: tvaActive });
+    onCreer({ client: Number(clientId), type_doc: typeDoc, lignes: utiles, tva_active: tvaActive });
   };
 
   return (
@@ -69,11 +75,19 @@ function ModaleFacture({ clients, onFermer, onCreer }) {
           </button>
         </div>
         <div className="mt-esp-5 flex flex-col gap-esp-4">
-          <div>
-            <Label htmlFor="nf-client">Client</Label>
-            <select id="nf-client" value={clientId} onChange={(e) => setClientId(e.target.value)} className="mt-esp-2 h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi">
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.nom_societe}</option>)}
-            </select>
+          <div className="grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="nf-type">Type de document</Label>
+              <select id="nf-type" value={typeDoc} onChange={(e) => setTypeDoc(e.target.value)} className="mt-esp-2 h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi">
+                {TYPES_DOC.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="nf-client">Client</Label>
+              <select id="nf-client" value={clientId} onChange={(e) => setClientId(e.target.value)} className="mt-esp-2 h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi">
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.nom_societe}</option>)}
+              </select>
+            </div>
           </div>
           <div>
             <span className="font-courant text-[15px] font-semibold text-gris-700">Lignes de facturation</span>
@@ -154,6 +168,7 @@ export default function Factures() {
   const { notifier, session } = useOutletContext();
   const [recherche, setRecherche] = useState('');
   const [statut, setStatut] = useState('tous');
+  const [typeFiltre, setTypeFiltre] = useState('tous');
   const [modale, setModale] = useState(false);
   const [paiement, setPaiement] = useState(null);
   const [factures, setFactures] = useState([]);
@@ -162,10 +177,10 @@ export default function Factures() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState('');
 
-  const charger = async (q = '', st = 'tous') => {
+  const charger = async (q = '', st = 'tous', ty = 'tous') => {
     try {
       const [fs, cls] = await Promise.all([
-        listerFactures({ ...(q ? { search: q } : {}), ...(st !== 'tous' ? { statut: st } : {}) }),
+        listerFactures({ ...(q ? { search: q } : {}), ...(st !== 'tous' ? { statut: st } : {}), ...(ty !== 'tous' ? { type_doc: ty } : {}) }),
         listerClients(),
       ]);
       const liste = cls.results ?? cls;
@@ -182,17 +197,17 @@ export default function Factures() {
 
   useEffect(() => {
     setChargement(true);
-    const t = setTimeout(() => charger(recherche.trim(), statut), 250);
+    const t = setTimeout(() => charger(recherche.trim(), statut, typeFiltre), 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recherche, statut]);
+  }, [recherche, statut, typeFiltre]);
 
   const creer = async (data) => {
     try {
       const f = await creerFacture(data);
       setModale(false);
-      notifier({ type: 'succes', titre: 'Facture créée', texte: `${f.numero} — statut Brouillon.` });
-      charger(recherche.trim(), statut);
+      notifier({ type: 'succes', titre: `${TYPE_DOC_LABEL[data.type_doc] ?? 'Facture'} créée`, texte: `${f.numero} — statut Brouillon.` });
+      charger(recherche.trim(), statut, typeFiltre);
     } catch (e) {
       notifier({ type: 'info', titre: 'Création impossible', texte: messageErreur(e) });
     }
@@ -216,7 +231,7 @@ export default function Factures() {
       const recu = await payerFacture(f.id, data);
       setPaiement(null);
       notifier({ type: 'succes', titre: 'Paiement reçu', texte: `${f.numero} — reçu ${recu.numero} généré et envoyé.` });
-      charger(recherche.trim(), statut);
+      charger(recherche.trim(), statut, typeFiltre);
     } catch (e) {
       notifier({ type: 'info', titre: 'Encaissement impossible', texte: messageErreur(e) });
     }
@@ -226,7 +241,7 @@ export default function Factures() {
     try {
       await envoyerFacture(f.id);
       notifier({ type: 'succes', titre: 'Facture envoyée', texte: `Template facture_disponible + PDF à ${f.numero}.` });
-      charger(recherche.trim(), statut);
+      charger(recherche.trim(), statut, typeFiltre);
     } catch (e) {
       notifier({ type: 'info', titre: 'Envoi impossible', texte: messageErreur(e) });
     }
@@ -259,11 +274,15 @@ export default function Factures() {
         </span>
       </div>
 
-      <div className="mt-esp-6 grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
-        <div className="relative">
+      <div className="mt-esp-6 grid grid-cols-1 gap-esp-4 sm:grid-cols-3">
+        <div className="relative sm:col-span-1">
           <Search size={20} aria-hidden="true" className="pointer-events-none absolute left-esp-3 top-1/2 -translate-y-1/2 text-gris-400" />
           <input type="search" value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Numéro, client…" aria-label="Rechercher une facture" className="h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 pl-11 pr-esp-4 font-courant text-[15px] text-gris-700 placeholder:text-gris-400 focus:border-digi" />
         </div>
+        <select value={typeFiltre} onChange={(e) => setTypeFiltre(e.target.value)} aria-label="Filtrer par type" className="h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi">
+          <option value="tous">Tous types</option>
+          {TYPES_DOC.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
         <select value={statut} onChange={(e) => setStatut(e.target.value)} aria-label="Filtrer par statut" className="h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi sm:max-w-96">
           {STATUTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
@@ -276,10 +295,10 @@ export default function Factures() {
           ) : erreur ? (
             <p className="px-esp-5 py-esp-6 text-center font-courant text-[15px] text-erreur" role="alert">{erreur}</p>
           ) : (
-          <table className="w-full min-w-[760px] border-collapse text-left">
+          <table className="w-full min-w-[820px] border-collapse text-left">
             <thead>
               <tr className="border-b border-gris-300">
-                {['Facture', 'Client', 'Montant', 'Statut', 'Actions'].map((col) => (
+                {['Facture', 'Type', 'Client', 'Montant', 'Statut', 'Actions'].map((col) => (
                   <th key={col} scope="col" className="px-esp-3 pb-esp-2 font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">{col}</th>
                 ))}
               </tr>
@@ -291,6 +310,7 @@ export default function Factures() {
                     <span className="font-mono text-[13px] text-gris-700">{f.numero}</span>
                     <span className="block font-courant text-[13px] text-gris-600 dg-tnum">Payé {fCFA(Number(f.paye ?? 0))} · Solde {fCFA(Number(f.solde ?? 0))}</span>
                   </td>
+                  <td className="px-esp-3 py-esp-3"><Badge ton={(f.type_doc ?? 'facture') === 'proforma' ? 'info' : 'neutre'}>{TYPE_DOC_LABEL[f.type_doc] ?? 'Facture'}</Badge></td>
                   <td className="px-esp-3 py-esp-3 font-courant text-[15px] text-gris-700">{nomsClients[f.client] ?? ''}</td>
                   <td className="px-esp-3 py-esp-3 font-courant text-[15px] font-semibold text-gris-900 dg-tnum whitespace-nowrap">{fCFA(Number(f.total ?? 0))}{f.tva_active && <span className="ml-esp-2"><Badge ton="info">TVA 18 %</Badge></span>}</td>
                   <td className="px-esp-3 py-esp-3"><Badge ton={STATUT_TON[f.statut] || 'neutre'}>{STATUT_LABEL[f.statut] ?? f.statut}</Badge></td>

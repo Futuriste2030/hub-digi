@@ -79,6 +79,12 @@ class Invoice(models.Model):
         (STATUT_BROUILLON, "Brouillon"), (STATUT_VALIDEE, "Validée"), (STATUT_ENVOYEE, "Envoyée"),
         (STATUT_PAYEE, "Payée"), (STATUT_PARTIELLE, "Partielle"), (STATUT_IMPAYEE, "Impayée"),
     ]
+    TYPE_FACTURE = "facture"
+    TYPE_PROFORMA = "proforma"
+    TYPES = [(TYPE_FACTURE, "Facture"), (TYPE_PROFORMA, "Proforma")]
+
+    type_doc = models.CharField(max_length=20, choices=TYPES, default=TYPE_FACTURE,
+                               help_text="Facture ou Proforma (affiché sur le document).")
 
     client = models.ForeignKey("clients.Client", null=True, blank=True,
                                    on_delete=models.CASCADE, related_name="factures",
@@ -106,7 +112,8 @@ class Invoice(models.Model):
         super().save(*args, **kwargs)
         if nouveau:
             date = timezone.localdate(self.cree_le) if self.cree_le else timezone.localdate()
-            self.numero = numero_document("FACTURE", slug_client(self.destinataire_nom), date, self.pk)
+            prefixe = "PROFORMA" if self.type_doc == self.TYPE_PROFORMA else "FACTURE"
+            self.numero = numero_document(prefixe, slug_client(self.destinataire_nom), date, self.pk)
             super().save(update_fields=["numero"])
 
     @property

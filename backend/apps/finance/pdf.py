@@ -367,7 +367,9 @@ def pdf_devis(devis):
 def pdf_facture(facture):
     from django.conf import settings
 
-    doc, story, buf, normal, soc, gras, droite, droite_gras = _base("Facture", facture.numero or "—")
+    est_proforma = getattr(facture, "type_doc", "facture") == "proforma"
+    titre_doc = "Facture Proforma" if est_proforma else "Facture"
+    doc, story, buf, normal, soc, gras, droite, droite_gras = _base(titre_doc, facture.numero or "—")
     st = {"normal": normal, "gras": gras, "droite": droite, "droite_gras": droite_gras}
     taux = TAUX_TVA_ACTIVE if facture.tva_active else TAUX_TVA
     lignes = list(facture.lignes.all())

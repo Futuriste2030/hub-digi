@@ -58,7 +58,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         model = Invoice
         fields = ["id", "client", "inscription", "client_nom", "client_email", "client_adresse",
                   "client_phone", "formation_titre", "project", "project_titre", "numero",
-                  "tva_active", "statut", "envoyee_le", "total", "paye", "solde",
+                  "type_doc", "tva_active", "statut", "envoyee_le", "total", "paye", "solde",
                   "lignes", "cree_le"]
         read_only_fields = ["numero", "envoyee_le"]
 
@@ -174,7 +174,7 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
                                               "inscription__participant").prefetch_related("lignes", "recus").all()
     serializer_class = InvoiceSerializer
     permission_classes = [IsAuthenticated]
-    filterset_fields = ["client", "statut"]
+    filterset_fields = ["client", "statut", "type_doc"]
     search_fields = ["numero"]
 
     @action(detail=True, methods=["get"])

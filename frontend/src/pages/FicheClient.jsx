@@ -409,7 +409,7 @@ function OngletFinance({ client, notifier, onFait }) {
                   <tr key={f.numero} className="border-b border-gris-200 align-top last:border-0">
                     <td className="py-esp-3 pr-esp-3">
                       <span className="font-mono text-[13px] text-gris-700">{f.numero}</span>
-                      <span className="block font-courant text-[13px] text-gris-600">{f.date}</span>
+                      <span className="block font-courant text-[13px] text-gris-600">{f.date}{f.type_doc === 'proforma' ? ' · Proforma' : ''}</span>
                     </td>
                     <td className="py-esp-3 pr-esp-3 font-courant text-[15px] font-semibold text-gris-900 dg-tnum whitespace-nowrap">{fCFA(f.total)}</td>
                     <td className="py-esp-3 pr-esp-3"><Badge ton={ton}>{statutLabel}</Badge></td>

@@ -508,6 +508,7 @@ export default function EspaceClient() {
   const factures = (donnees.factures ?? []).map((f) => ({
     id: f.id, numero: f.numero, objet: '', montant: fCFA(Number(f.total ?? 0)), total: Number(f.total ?? 0),
     solde: Number(f.solde ?? 0), statut: LABEL_FACTURE[f.statut] ?? f.statut, statutId: f.statut,
+    type_doc: f.type_doc ?? 'facture', typeDoc: f.type_doc ?? 'facture',
     date: dateFr(f.cree_le), lignes: f.lignes ?? [],
   }));
   const impayees = factures.filter((f) => f.statutId !== 'payee');
@@ -605,6 +606,7 @@ export default function EspaceClient() {
   if (docFacture) {
     const doc = {
       numero: docFacture.numero, date: docFacture.date, statut: docFacture.statut,
+      typeDoc: docFacture.type_doc ?? docFacture.typeDoc ?? 'facture',
       lignes: (docFacture.lignes ?? []).map((l) => ({ description: l.description, quantite: Number(l.quantite), montant: Number(l.montant) })),
     };
     return (

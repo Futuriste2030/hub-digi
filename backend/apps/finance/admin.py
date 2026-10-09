@@ -19,7 +19,8 @@ class DevisAdmin(admin.ModelAdmin):
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ("numero", "client", "statut")
+    list_display = ("numero", "client", "type_doc", "statut")
+    list_filter = ("type_doc", "statut")
 
 
 @admin.register(Receipt)

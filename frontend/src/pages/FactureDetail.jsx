@@ -14,6 +14,7 @@ import { NonTrouve } from './Pages.jsx';
 /* Détail facture — API réelle : document + paiement + envoi + PDF serveur. */
 
 const STATUT_LABEL = { brouillon: 'Brouillon', validee: 'Validée', envoyee: 'Envoyée', partielle: 'Partielle', payee: 'Payée', impayee: 'Impayée' };
+const TYPE_DOC_LABEL = { facture: 'Facture', proforma: 'Proforma' };
 
 const dateFr = (iso) => {
   const d = new Date(iso);
@@ -87,6 +88,17 @@ export default function FactureDetail() {
     }
   };
 
+  const changerType = async (typeDoc) => {
+    if (typeDoc === (facture.type_doc ?? 'facture')) return;
+    try {
+      await majFacture(facture.id, { type_doc: typeDoc });
+      notifier({ type: 'succes', titre: 'Type mis à jour', texte: `${facture.numero} — affiché comme ${TYPE_DOC_LABEL[typeDoc]}.` });
+      charger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Action impossible', texte: messageErreur(e) });
+    }
+  };
+
   const pdfServeur = async () => {
     try {
       await telechargerPdf(`/finance/invoices/${facture.id}/pdf/`, `${facture.numero}.pdf`);
@@ -114,6 +126,7 @@ export default function FactureDetail() {
     numero: facture.numero,
     date: dateFr(facture.cree_le),
     statut: STATUT_LABEL[facture.statut] ?? facture.statut,
+    typeDoc: facture.type_doc ?? 'facture',
     tauxTva: facture.tva_active ? 18 : 0,
     tvaActive: !!facture.tva_active,
     client: facture.client_nom ?? '',
@@ -132,7 +145,7 @@ export default function FactureDetail() {
         </Link>
         <div className="mt-esp-2 flex flex-wrap items-center gap-esp-3">
           <div className="mr-auto">
-            <p className="dg-surtitre">Finance</p>
+            <p className="dg-surtitre">Finance · {TYPE_DOC_LABEL[facture.type_doc] ?? 'Facture'}</p>
             <h1 className="mt-esp-2">{facture.numero}</h1>
           </div>
           <Button variante="secondaire" onClick={() => window.print()}>
@@ -148,6 +161,12 @@ export default function FactureDetail() {
             <Button variante={facture.tva_active ? 'primaire' : 'secondaire'} onClick={basculerTva} title="Activer ou couper la TVA 18 %">
               TVA {facture.tva_active ? '18 % ON' : 'OFF'}
             </Button>
+          )}
+          {peutValider && (
+            <select value={facture.type_doc ?? 'facture'} onChange={(e) => changerType(e.target.value)} aria-label="Type de document" title="Facture ou Proforma — affiché sur le document" className="h-11 min-h-[44px] rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] font-semibold text-gris-700 focus:border-digi">
+              <option value="facture">Facture</option>
+              <option value="proforma">Proforma</option>
+            </select>
           )}
           {peutValider && facture.statut !== 'payee' && (
             <Button onClick={payer}>

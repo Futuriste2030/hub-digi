@@ -10,6 +10,8 @@ import { fCFA } from '../../utils/stats.js';
 
 export default function FactureDoc({ facture, entreprise }) {
   const barcodeRef = useRef(null);
+  const estProforma = (facture.typeDoc ?? facture.type_doc ?? 'facture') === 'proforma';
+  const titreDoc = estProforma ? 'Facture Proforma' : 'Facture';
 
   useEffect(() => {
     if (barcodeRef.current) {
@@ -45,7 +47,7 @@ export default function FactureDoc({ facture, entreprise }) {
           </span>
         </span>
         <span className="text-right">
-          <span className="block font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-digi-signal">Facture</span>
+          <span className="block font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-digi-signal">{titreDoc}</span>
           <span className="block font-mono text-[18px] font-semibold text-blanc">{facture.numero}</span>
         </span>
       </div>
