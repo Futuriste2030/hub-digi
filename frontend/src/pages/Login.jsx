@@ -9,7 +9,7 @@ import { listerClients } from '../api/clients.js';
 import { statutPointage } from '../api/ressources.js';
 import { urlEspace, urlTableauDeBord } from '../lib/acces.js';
 import { demanderReset } from '../api/auth.js';
-import { CLE_EXPIRATION } from '../hooks/useInactivite.js';
+import { CLE_EXPIRATION, DELAI_MINUTES } from '../hooks/useInactivite.js';
 import { biometrieSupportee, connecterBiometrie, messageBiometrie } from '../lib/biometrie.js';
 import { messageErreur } from '../api/client.js';
 
@@ -281,7 +281,7 @@ export default function Login() {
 
           {expireInfo && (
             <p role="status" className="mt-esp-4 rounded-md border border-alerte bg-alerte-fond p-esp-3 font-courant text-[15px] text-gris-700">
-              Session fermée après 15 minutes d inactivité. Reconnectez-vous.
+              Session fermée après {DELAI_MINUTES} minutes d inactivité. Reconnectez-vous.
             </p>
           )}
           {otpTemp ? (

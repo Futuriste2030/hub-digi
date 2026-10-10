@@ -20,7 +20,7 @@ import { api } from '../api/client.js';
 import { dashboardPortal, detailFacture, listerRecus, payerFacture, rejeterDevis, validerDevis as validerDevisApi } from '../api/finance.js';
 import { creerTicket as creerTicketApi } from '../api/tickets.js';
 import { listerClients } from '../api/clients.js';
-import useInactivite, { CLE_EXPIRATION } from '../hooks/useInactivite.js';
+import useInactivite, { CLE_EXPIRATION, DELAI_MINUTES } from '../hooks/useInactivite.js';
 import { demanderReset } from '../api/auth.js';
 import { listerMailsEnvoyes } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
@@ -129,7 +129,7 @@ function ConnexionEspace() {
         <div className="mt-esp-5 rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
           <h1 className="font-titrage text-[21px] font-bold text-gris-900">Connexion à votre espace</h1>
           <p className="mt-esp-1 font-courant text-[15px] text-gris-600">Identifiant transmis par l agence + mot de passe défini par vous via le lien d invitation.</p>
-          {expireInfo && <div className="mt-esp-2"><Alert ton="alerte" titre="Session fermée">15 minutes sans activité — reconnectez-vous.</Alert></div>}
+          {expireInfo && <div className="mt-esp-2"><Alert ton="alerte" titre="Session fermée">{DELAI_MINUTES} minutes sans activité — reconnectez-vous.</Alert></div>}
           <form onSubmit={connecter} className="mt-esp-5 flex flex-col gap-esp-4">
             <div>
               <Label htmlFor="espace-email">Identifiant ou e-mail</Label>
@@ -383,7 +383,7 @@ export default function EspaceClient() {
   const [erreurEspace, setErreurEspace] = useState('');
   const entreprise = getEntreprise();
 
-  /* Même garde d'inactivité que le hub (15 min + préavis 2 min). */
+  /* Même garde d'inactivité que le hub (défaut 15 min + préavis 2 min). */
   const { enPreavis, secondesRestantes, prolonger } = useInactivite({
     actif: !!access,
     onExpirer: () => {

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-/* Déconnexion automatique après inactivité — 15 min, préavis 2 min.
+/* Déconnexion automatique après inactivité (défaut 15 min, préavis 2 min).
    Seuls les gestes utilisateur comptent (pas les appels API en tâche de fond).
    Horodatage partagé en localStorage : l'activité dans un onglet garde
    les autres onglets en vie. */
 
-export const DELAI_INACTIVITE_MS = 15 * 60 * 1000;
-export const PREAVIS_MS = 2 * 60 * 1000;
+/* Délais réglables en .env (pratique pour tester en local avec 1 min) :
+   VITE_INACTIVITE_MINUTES=15, VITE_PREAVIS_MINUTES=2 par défaut. */
+export const DELAI_MINUTES = Number(import.meta.env.VITE_INACTIVITE_MINUTES) || 15;
+export const PREAVIS_MINUTES = Number(import.meta.env.VITE_PREAVIS_MINUTES) || 2;
+export const DELAI_INACTIVITE_MS = DELAI_MINUTES * 60 * 1000;
+export const PREAVIS_MS = PREAVIS_MINUTES * 60 * 1000;
 export const CLE_ACTIVITE = 'hubdigi-derniere-activite';
 export const CLE_EXPIRATION = 'hubdigi-inactivite';
 
@@ -58,11 +62,14 @@ export default function useInactivite({ actif, onExpirer }) {
 
   useEffect(() => {
     if (!actif) return;
-    if (!lire()) {
-      const maintenant = Date.now();
-      dernierEcritRef.current = maintenant;
-      ecrire(maintenant);
-    }
+    /* Toujours repartir de maintenant à l'activation : un horodatage périmé
+       d'une session précédente provoquerait une déconnexion immédiate. */
+    const maintenant = Date.now();
+    dernierEcritRef.current = maintenant;
+    ecrire(maintenant);
+    expireRef.current = false;
+    setEnPreavis(false);
+    setSecondesRestantes(DELAI_INACTIVITE_MS / 1000);
     EVENEMENTS.forEach((e) => window.addEventListener(e, toucher, { passive: true }));
     const surStockage = (e) => {
       if (e.key === CLE_ACTIVITE) setEnPreavis(false);

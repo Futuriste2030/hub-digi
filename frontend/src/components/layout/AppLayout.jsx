@@ -67,8 +67,8 @@ export default function AppLayout() {
     chargerEntreprise();
   }, [restaurer]);
 
-  /* Déconnexion auto après 15 min sans geste (préavis 2 min) : le refresh JWT
-     seul ne suffit pas, un poste déverrouillé ne doit pas rester ouvert. */
+  /* Déconnexion auto après inactivité (défaut 15 min, préavis 2 min) :
+     le refresh JWT seul ne suffit pas, un poste déverrouillé ne doit pas rester ouvert. */
   const { enPreavis, secondesRestantes, prolonger } = useInactivite({
     actif: !!access,
     onExpirer: () => {
