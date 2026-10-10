@@ -9,6 +9,7 @@ import { listerClients } from '../api/clients.js';
 import { statutPointage } from '../api/ressources.js';
 import { urlEspace, urlTableauDeBord } from '../lib/acces.js';
 import { demanderReset } from '../api/auth.js';
+import { CLE_EXPIRATION } from '../hooks/useInactivite.js';
 import { biometrieSupportee, connecterBiometrie, messageBiometrie } from '../lib/biometrie.js';
 import { messageErreur } from '../api/client.js';
 
@@ -179,6 +180,17 @@ export default function Login() {
   const [modale, setModale] = useState(null);
   const [erreurBio, setErreurBio] = useState('');
   const [bioEnCours, setBioEnCours] = useState(false);
+  const [expireInfo] = useState(() => {
+    try {
+      if (window.sessionStorage.getItem(CLE_EXPIRATION) === '1') {
+        window.sessionStorage.removeItem(CLE_EXPIRATION);
+        return true;
+      }
+    } catch {
+      /* stockage indisponible */
+    }
+    return false;
+  });
 
   const allerAccueil = async (sess) => {
     if (sess?.role === 'client') {
@@ -267,6 +279,11 @@ export default function Login() {
             </div>
           </div>
 
+          {expireInfo && (
+            <p role="status" className="mt-esp-4 rounded-md border border-alerte bg-alerte-fond p-esp-3 font-courant text-[15px] text-gris-700">
+              Session fermée après 15 minutes d inactivité. Reconnectez-vous.
+            </p>
+          )}
           {otpTemp ? (
           <form onSubmit={validerCode} className="mt-esp-5 flex flex-col gap-esp-4">
             <p className="font-courant text-[15px] text-gris-600">

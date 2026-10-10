@@ -11,6 +11,7 @@ import { useAuth, useSession } from '../../store/auth.js';
 import { chargerEntreprise } from '../../data/parametres.js';
 import { api } from '../../api/client.js';
 import { statutPointage } from '../../api/ressources.js';
+import useInactivite, { CLE_EXPIRATION } from '../../hooks/useInactivite.js';
 
 /* Coquille logicielle : sidebar marine rétractable + colonne (topbar, contenu, pied fin).
    Fournit aux pages : recherche globale, notifications toast. Session réelle (JWT). */
@@ -21,6 +22,23 @@ function lirePreference() {
   } catch {
     return true;
   }
+}
+
+function BanniereInactivite({ compteRebours, onProlonger }) {
+  return (
+    <div role="alert" className="flex min-h-[44px] flex-wrap items-center justify-center gap-esp-3 bg-erreur px-esp-5 py-esp-2 text-center">
+      <p className="font-courant text-[15px] font-semibold text-blanc">
+        Inactivité détectée — déconnexion dans {compteRebours}.
+      </p>
+      <button
+        type="button"
+        onClick={onProlonger}
+        className="inline-flex min-h-[44px] items-center rounded-md bg-blanc px-esp-4 font-courant text-[15px] font-bold text-erreur"
+      >
+        Rester connecté
+      </button>
+    </div>
+  );
 }
 
 export default function AppLayout() {
@@ -48,6 +66,22 @@ export default function AppLayout() {
     restaurer().finally(() => setPret(true));
     chargerEntreprise();
   }, [restaurer]);
+
+  /* Déconnexion auto après 15 min sans geste (préavis 2 min) : le refresh JWT
+     seul ne suffit pas, un poste déverrouillé ne doit pas rester ouvert. */
+  const { enPreavis, secondesRestantes, prolonger } = useInactivite({
+    actif: !!access,
+    onExpirer: () => {
+      try {
+        window.sessionStorage.setItem(CLE_EXPIRATION, '1');
+      } catch {
+        /* stockage indisponible */
+      }
+      logout();
+      naviguer('/login');
+    },
+  });
+  const compteRebours = `${String(Math.floor(secondesRestantes / 60)).padStart(2, '0')}:${String(secondesRestantes % 60).padStart(2, '0')}`;
 
   /* Revérifié à chaque navigation : couvre reopen navigateur + évasion par sidebar.
      Fail-open si API indisponible (comme au login). Clients exclus (pas de fiche employé). */
@@ -116,6 +150,7 @@ export default function AppLayout() {
   if (pointageBloquant) {
     return (
       <div className="flex min-h-screen flex-col bg-gris-100">
+        {enPreavis && <BanniereInactivite compteRebours={compteRebours} onProlonger={prolonger} />}
         <header className="border-b border-gris-300 bg-marine-profond">
           <div className="mx-auto flex h-16 w-full max-w-grille items-center gap-esp-3 px-esp-5">
             <Logo hauteur={36} />
@@ -158,6 +193,7 @@ export default function AppLayout() {
     <div className="flex min-h-screen bg-gris-100">
       <Sidebar mobileOuvert={mobileOuvert} fermer={() => setMobileOuvert(false)} retractee={retractee} session={session} />
       <div className="flex min-w-0 flex-1 flex-col">
+        {enPreavis && <BanniereInactivite compteRebours={compteRebours} onProlonger={prolonger} />}
         <Topbar
           ouvrirMenu={() => setMobileOuvert(true)}
           basculerSidebar={basculerRetractee}

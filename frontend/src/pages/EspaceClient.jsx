@@ -20,6 +20,7 @@ import { api } from '../api/client.js';
 import { dashboardPortal, detailFacture, listerRecus, payerFacture, rejeterDevis, validerDevis as validerDevisApi } from '../api/finance.js';
 import { creerTicket as creerTicketApi } from '../api/tickets.js';
 import { listerClients } from '../api/clients.js';
+import useInactivite, { CLE_EXPIRATION } from '../hooks/useInactivite.js';
 import { demanderReset } from '../api/auth.js';
 import { listerMailsEnvoyes } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
@@ -78,6 +79,17 @@ function ConnexionEspace() {
   const [envoi, setEnvoi] = useState(false);
   const [lienEnvoye, setLienEnvoye] = useState(false);
   const [envoiLien, setEnvoiLien] = useState(false);
+  const [expireInfo] = useState(() => {
+    try {
+      if (window.sessionStorage.getItem(CLE_EXPIRATION) === '1') {
+        window.sessionStorage.removeItem(CLE_EXPIRATION);
+        return true;
+      }
+    } catch {
+      /* stockage indisponible */
+    }
+    return false;
+  });
 
   const connecter = async (e) => {
     e.preventDefault();
@@ -117,6 +129,7 @@ function ConnexionEspace() {
         <div className="mt-esp-5 rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
           <h1 className="font-titrage text-[21px] font-bold text-gris-900">Connexion à votre espace</h1>
           <p className="mt-esp-1 font-courant text-[15px] text-gris-600">Identifiant transmis par l agence + mot de passe défini par vous via le lien d invitation.</p>
+          {expireInfo && <div className="mt-esp-2"><Alert ton="alerte" titre="Session fermée">15 minutes sans activité — reconnectez-vous.</Alert></div>}
           <form onSubmit={connecter} className="mt-esp-5 flex flex-col gap-esp-4">
             <div>
               <Label htmlFor="espace-email">Identifiant ou e-mail</Label>
@@ -369,6 +382,20 @@ export default function EspaceClient() {
   const [choisirClient, setChoisirClient] = useState(false);
   const [erreurEspace, setErreurEspace] = useState('');
   const entreprise = getEntreprise();
+
+  /* Même garde d'inactivité que le hub (15 min + préavis 2 min). */
+  const { enPreavis, secondesRestantes, prolonger } = useInactivite({
+    actif: !!access,
+    onExpirer: () => {
+      try {
+        window.sessionStorage.setItem(CLE_EXPIRATION, '1');
+      } catch {
+        /* stockage indisponible */
+      }
+      logout();
+    },
+  });
+  const compteRebours = `${String(Math.floor(secondesRestantes / 60)).padStart(2, '0')}:${String(secondesRestantes % 60).padStart(2, '0')}`;
 
   /* Résolution du compte : /espace/:slug/:code validés ensemble.
      - super_admin : prévisualise via l'URL personnalisée complète (pas de sélecteur en prod) ;
@@ -692,6 +719,20 @@ export default function EspaceClient() {
 
   return (
     <div className="min-h-screen bg-gris-100">
+      {enPreavis && (
+        <div role="alert" className="flex min-h-[44px] flex-wrap items-center justify-center gap-esp-3 bg-erreur px-esp-5 py-esp-2 text-center">
+          <p className="font-courant text-[15px] font-semibold text-blanc">
+            Inactivité détectée — déconnexion dans {compteRebours}.
+          </p>
+          <button
+            type="button"
+            onClick={prolonger}
+            className="inline-flex min-h-[44px] items-center rounded-md bg-blanc px-esp-4 font-courant text-[15px] font-bold text-erreur"
+          >
+            Rester connecté
+          </button>
+        </div>
+      )}
       <header className="border-b border-gris-300 bg-marine-profond">
         <div className="mx-auto flex w-full max-w-grille flex-wrap items-center gap-esp-3 px-esp-5 py-esp-4">
           <Logo hauteur={40} />
