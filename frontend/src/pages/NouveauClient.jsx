@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-import { ArrowLeft, Building2, UserRound, KeyRound, RefreshCw, Eye, EyeOff, Copy, Mail } from 'lucide-react';
+import { ArrowLeft, Building2, UserRound, KeyRound, RefreshCw, Copy } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import { Card, CardHeader, CardBody } from '../components/ui/Card.jsx';
 import { Label, Input, Textarea } from '../components/ui/Input.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
-import { ROLES_ADMIN, ROLES_CREATION_CLIENT, peutVoir } from '../lib/acces.js';
-import { creerClient, creerCompteClient, envoyerAccesClient, genererMdp, genererUsername } from '../api/clients.js';
+import { ROLES_CREATION_CLIENT, peutVoir } from '../lib/acces.js';
+import { creerClient, creerCompteClient, genererUsername } from '../api/clients.js';
 import { messageErreur } from '../api/client.js';
 
-/* Nouveau client — POST /api/v1/clients/ puis compte espace client (/users/). */
+/* Nouveau client — POST /api/v1/clients/ puis compte sans mdp (/users/) + invitation 24h. */
 
 const STATUTS = [
   { valeur: 'prospect', label: 'Prospect' },
@@ -32,14 +32,13 @@ export default function NouveauClient() {
   });
   const [erreurs, setErreurs] = useState({});
   const [envoi, setEnvoi] = useState(false);
-  /* Identifiants espace client générés par le système, transmis au client. */
-  const [acces, setAcces] = useState(() => ({ username: genererUsername('client'), mdp: genererMdp() }));
-  const [mdpVisible, setMdpVisible] = useState(false);
+  /* Identifiant espace client — aucun mot de passe généré/transmis :
+     le client définit lui-même son mdp via le lien d'invitation 24h. */
+  const [acces, setAcces] = useState(() => ({ username: genererUsername('client') }));
 
   const generer = (societe) => {
     setAcces({
       username: genererUsername(societe && societe.trim().length >= 2 ? societe : 'client'),
-      mdp: genererMdp(),
     });
   };
 
@@ -99,8 +98,8 @@ export default function NouveauClient() {
         return;
       }
       try {
-        await creerCompteClient({ clientId: cree.id, email: form.email.trim(), username: acces.username, password: acces.mdp });
-        notifier({ type: 'succes', titre: 'Client créé', texte: `${cree.nom_societe} — compte espace client actif, fiche 360° ouverte.` });
+        await creerCompteClient({ clientId: cree.id, email: form.email.trim(), username: acces.username });
+        notifier({ type: 'succes', titre: 'Client créé', texte: `${cree.nom_societe} — compte invité créé, envoyez l'invitation depuis la fiche.` });
       } catch {
         notifier({ type: 'info', titre: 'Client créé', texte: `${cree.nom_societe} — compte espace à finaliser (droits super admin requis).` });
       }
@@ -112,15 +111,8 @@ export default function NouveauClient() {
     }
   };
 
-  /* Envoi manuel du template d'accès (pas d'auto-envoi) : identifiants + lien espace. */
-  const envoyerAcces = async () => {
-    try {
-      await envoyerAccesClient({ to: form.email.trim(), username: acces.username, espaceUrl: `${window.location.origin}/espace` });
-      notifier({ type: 'succes', titre: 'Mail d accès envoyé', texte: `Template « Bienvenue espace client » à ${form.email.trim()}.` });
-    } catch (e) {
-      notifier({ type: 'info', titre: 'Envoi impossible', texte: messageErreur(e) });
-    }
-  };
+  /* Pas d'envoi depuis cet écran : le compte est créé sans mdp, puis
+     l'invitation (lien 24h) part depuis la fiche client. */
 
   if (!peutVoir(session, ROLES_CREATION_CLIENT)) {
     return (
@@ -131,7 +123,6 @@ export default function NouveauClient() {
       />
     );
   }
-  const peutEnvoyer = peutVoir(session, ROLES_ADMIN);
 
   return (
     <div>
@@ -249,9 +240,9 @@ export default function NouveauClient() {
           </CardHeader>
           <CardBody className="flex flex-col gap-esp-4">
             <p className="font-courant text-[15px] text-gris-600">
-              Identifiants générés par le système. Rien n est envoyé automatiquement :
-              appuyez sur l icône mail pour transmettre le template avec les identifiants et le lien de l espace.
-              En cas d oubli, un reset est possible depuis la fiche client.
+              Identifiant proposé. Aucun mot de passe n est généré ni envoyé :
+              après création, envoyez l invitation depuis la fiche client — le client
+              définit lui-même son mot de passe via un lien valable 24 heures.
             </p>
             <div className="grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
               <div>
@@ -263,28 +254,11 @@ export default function NouveauClient() {
                   </button>
                 </div>
               </div>
-              <div>
-                <Label htmlFor="nc-mdp">Mot de passe provisoire</Label>
-                <div className="mt-esp-2 flex gap-esp-2">
-                  <div className="flex-1"><Input id="nc-mdp" type={mdpVisible ? 'text' : 'password'} value={acces.mdp} readOnly /></div>
-                  <button type="button" onClick={() => setMdpVisible((v) => !v)} aria-label={mdpVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-gris-300 text-gris-600 hover:bg-gris-200">
-                    {mdpVisible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
-                  </button>
-                  <button type="button" onClick={() => copier(acces.mdp, 'Mot de passe')} aria-label="Copier le mot de passe" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-gris-300 text-gris-600 hover:bg-gris-200">
-                    <Copy size={18} aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
             </div>
             <div className="flex flex-wrap gap-esp-2">
               <Button variante="secondaire" taille="sm" onClick={() => generer(form.societe)}>
-                <RefreshCw size={16} aria-hidden="true" /> Régénérer les identifiants
+                <RefreshCw size={16} aria-hidden="true" /> Régénérer l identifiant
               </Button>
-              {peutEnvoyer && (
-              <Button taille="sm" onClick={envoyerAcces} title="Envoyer le template avec identifiants + lien espace">
-                <Mail size={16} aria-hidden="true" /> Envoyer les accès
-              </Button>
-              )}
             </div>
           </CardBody>
         </Card>

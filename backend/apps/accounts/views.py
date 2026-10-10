@@ -237,7 +237,10 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+    # Mot de passe optionnel : les comptes clients sont créés SANS mot de passe
+    # (set_unusable_password) et activés via lien d'invitation 24h — aucun secret
+    # ne transite par mail. Les comptes internes exigent toujours un mot de passe.
+    password = serializers.CharField(write_only=True, min_length=8, required=False, allow_blank=False)
 
     class Meta:
         model = User
@@ -258,12 +261,25 @@ class UserCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"client": "Client interne (ex. Digi Com) : aucun compte espace client ne doit être créé."}
                 )
+            if not attrs.get("client"):
+                raise serializers.ValidationError(
+                    {"client": "Un compte client doit être rattaché à une fiche client."}
+                )
+        elif not attrs.get("password"):
+            raise serializers.ValidationError(
+                {"password": "Mot de passe requis pour un compte interne."}
+            )
         return attrs
 
     def create(self, validated_data):
-        password = validated_data.pop("password")
+        password = validated_data.pop("password", "")
         user = User(**validated_data)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            # Compte invité : connexion impossible tant que le client n'a pas
+            # défini son mot de passe via le lien d'activation (token 24h).
+            user.set_unusable_password()
         user.save()
         return user
 
@@ -285,9 +301,15 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def reset_password(self, request, pk=None):
-        """Reset admin du mot de passe (super_admin) — SPEC §3 : sans envoi auto,
-        l'opérateur transmet ensuite via le template bienvenue (Bouton Envoyer)."""
+        """Reset admin du mot de passe (super_admin) — réservé aux comptes internes.
+        Les comptes clients passent par POST /clients/:id/send-access/ (lien
+        d'activation 24h) : aucun mot de passe ne doit transiter par mail."""
         user = self.get_object()
+        if user.role == "client":
+            return Response(
+                {"detail": "Compte client : utilisez POST /clients/:id/send-access/ (lien d'invitation 24h)."},
+                status=400,
+            )
         nouveau = request.data.get("new_password", "")
         if len(nouveau) < 8:
             return Response({"new_password": "8 caractères minimum."}, status=400)

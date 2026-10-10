@@ -157,13 +157,15 @@ export const CLIENTS = [
 /* Création mock — POST /api/v1/clients/ prendra le relais. */
 const TONS_STATUT = { Prospect: 'info', Actif: 'succes', 'En pause': 'alerte' };
 
-/* Identifiants espace client — le système génère username + mot de passe
-   transmis au client. Backend : hash bcrypt + envoi mail, jamais en clair en base. */
+/* Identifiant espace client — aucun mot de passe transmis : le client définit
+   lui-même son mdp via le lien d'invitation 24h (POST /clients/:id/send-access/). */
 export function genererUsername(societe) {
   const base = slugifier(societe) || 'client';
   return `${base}-${Math.floor(10 + Math.random() * 90)}`;
 }
 
+/* Déprécié : aucun mot de passe ne doit être généré côté front (lien 24h).
+   Conservé pour compat mock locale uniquement. */
 export function genererMdp(longueur = 10) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#';
   let mdp = '';
@@ -182,9 +184,9 @@ export function slugifier(texte) {
     .replace(/^-|-$/g, '');
 }
 
-/* Identifiants initiaux des clients existants (mock seed). */
+/* Identifiants initiaux des clients existants (mock seed, sans mot de passe). */
 CLIENTS.forEach((c) => {
-  if (!c.acces) c.acces = { username: `${c.id}-${Math.floor(10 + Math.random() * 90)}`, mdp: genererMdp() };
+  if (!c.acces) c.acces = { username: `${c.id}-${Math.floor(10 + Math.random() * 90)}` };
 });
 
 export const getClient = (id) => CLIENTS.find((c) => c.id === id);
@@ -274,13 +276,12 @@ export function validerAssetClient(clientId, campagneNom, assetId) {
     : camp));
 }
 
-/* Reset mot de passe — backend : POST /api/v1/clients/:id/reset-password/
-   (nouveau mdp hashé + retransmis au client par mail). */
+/* Invitation mock — backend : POST /api/v1/clients/:id/send-access/
+   (lien d'activation 24h, aucun mot de passe transmis). */
 export function resetMdpClient(id) {
-  const mdp = genererMdp();
   const c = CLIENTS.find((x) => x.id === id);
-  if (c) c.acces = { ...(c.acces ?? { username: genererUsername(c.societe) }), mdp };
-  return mdp;
+  if (c) c.acces = { ...(c.acces ?? { username: genererUsername(c.societe) }), invitationEnvoyee: true };
+  return true;
 }
 
 export function ajouterClient({ societe, contact, fonction, email, phone, adresse, statut, acces }) {
@@ -297,7 +298,7 @@ export function ajouterClient({ societe, contact, fonction, email, phone, adress
     statut,
     tonStatut: TONS_STATUT[statut] || 'info',
     tags: [statut],
-    acces: acces ?? { username: genererUsername(societe), mdp: genererMdp() },
+    acces: acces ?? { username: genererUsername(societe) },
     kpi: { projetsActifs: 0, impayes: '0 F', ticketsOuverts: 0 },
     projets: [],
     campagnes: [],

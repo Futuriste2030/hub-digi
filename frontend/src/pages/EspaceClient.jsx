@@ -20,6 +20,7 @@ import { api } from '../api/client.js';
 import { dashboardPortal, detailFacture, listerRecus, payerFacture, rejeterDevis, validerDevis as validerDevisApi } from '../api/finance.js';
 import { creerTicket as creerTicketApi } from '../api/tickets.js';
 import { listerClients } from '../api/clients.js';
+import { demanderReset } from '../api/auth.js';
 import { listerMailsEnvoyes } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
 import { getEntreprise } from '../data/parametres.js';
@@ -75,6 +76,8 @@ function ConnexionEspace() {
   const [motDePasse, setMotDePasse] = useState('');
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [lienEnvoye, setLienEnvoye] = useState(false);
+  const [envoiLien, setEnvoiLien] = useState(false);
 
   const connecter = async (e) => {
     e.preventDefault();
@@ -113,7 +116,7 @@ function ConnexionEspace() {
         </div>
         <div className="mt-esp-5 rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
           <h1 className="font-titrage text-[21px] font-bold text-gris-900">Connexion à votre espace</h1>
-          <p className="mt-esp-1 font-courant text-[15px] text-gris-600">Identifiants transmis par l agence. Sans code, sans détour.</p>
+          <p className="mt-esp-1 font-courant text-[15px] text-gris-600">Identifiant transmis par l agence + mot de passe défini par vous via le lien d invitation.</p>
           <form onSubmit={connecter} className="mt-esp-5 flex flex-col gap-esp-4">
             <div>
               <Label htmlFor="espace-email">Identifiant ou e-mail</Label>
@@ -127,6 +130,34 @@ function ConnexionEspace() {
             <Button type="submit" taille="lg" className="w-full" disabled={envoi}>{envoi ? 'Connexion…' : 'Se connecter'}</Button>
           </form>
           <div className="mt-esp-4 text-center">
+            {lienEnvoye ? (
+              <p className="font-courant text-[15px] text-gris-600" role="status">Si ce compte existe, un lien valable 24h vient d être envoyé.</p>
+            ) : (
+              <button
+                type="button"
+                disabled={envoiLien}
+                onClick={async () => {
+                  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+                    setErreur('Indiquez votre e-mail pro ci-dessus, puis redemandez le lien.');
+                    return;
+                  }
+                  setEnvoiLien(true);
+                  try {
+                    await demanderReset(email.trim());
+                    setLienEnvoye(true);
+                  } catch (e) {
+                    setErreur(messageErreur(e, 'Envoi impossible. Réessayez.'));
+                  } finally {
+                    setEnvoiLien(false);
+                  }
+                }}
+                className="inline-flex min-h-[44px] items-center font-courant text-[15px] font-semibold text-digi-texte hover:underline"
+              >
+                {envoiLien ? 'Envoi…' : 'Première connexion / mot de passe oublié'}
+              </button>
+            )}
+          </div>
+          <div className="mt-esp-2 text-center">
             <Link to="/" className="inline-flex min-h-[44px] items-center font-courant text-[15px] font-semibold text-digi-texte hover:underline">Hub agence</Link>
           </div>
         </div>

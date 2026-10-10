@@ -46,6 +46,72 @@ class ClientViewSet(viewsets.ModelViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=True, methods=["post"])
+    def send_access(self, request, pk=None):
+        """Invitation espace client — aucun mot de passe transmis.
+
+        Crée le compte client s'il manque (mot de passe inutilisable), génère
+        un lien d'activation uid/token 24h (même mécanisme que reset password,
+        usage unique lié au hash) et l'envoie via le template
+        ``bienvenue_espace_client`` avec l'identifiant + le lien espace.
+        Le client définit lui-même son mot de passe sur /reset-password/:uid/:token.
+        Réservé super_admin/admin. Renvoyer invalide le lien précédent.
+        """
+        from django.conf import settings
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.text import slugify
+
+        from apps.accounts.models import User
+        from apps.mailing.services import send_templated_mail
+
+        if request.user.role not in ("super_admin", "admin"):
+            return Response({"detail": "Envoi des accès réservé au Super Admin / Administration."}, status=403)
+        client = self.get_object()
+        if client.est_interne:
+            return Response({"detail": "Client interne : aucun compte ni espace client."}, status=400)
+        if not client.email:
+            return Response({"detail": "Renseignez l'e-mail sur la fiche client."}, status=400)
+
+        user = User.objects.filter(role="client", client=client).order_by("id").first()
+        if user is None:
+            base = (request.data.get("username") or client.nom_societe or "client").strip()
+            username = slugify(base, allow_unicode=False).replace("-", ".")[:24].strip(".") or "client"
+            candidat, i = username, 2
+            while User.objects.filter(username__iexact=candidat).exists():
+                suffix = f".{i}"
+                candidat = (username[: 24 - len(suffix)] + suffix).strip(".")
+                i += 1
+            user = User(email=client.email, username=candidat, role="client", client=client)
+            user.set_unusable_password()
+            user.save()
+        elif user.email.lower() != client.email.lower():
+            user.email = client.email
+            user.save(update_fields=["email"])
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        activation_url = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
+        espace_url = request.data.get("espace_url") or (
+            f"{settings.FRONTEND_URL}/espace/{client.slug}/{client.code}"
+            if client.slug and client.code
+            else f"{settings.FRONTEND_URL}/espace"
+        )
+        mail = send_templated_mail(
+            "bienvenue_espace_client", client.email,
+            {"societe": client.nom_societe, "username": user.username,
+             "espace_url": espace_url, "activation_url": activation_url},
+            client=client,
+        )
+        if mail is None:
+            return Response({"detail": "Template bienvenue_espace_client inactif ou introuvable."}, status=500)
+        return Response(
+            {"detail": f"Invitation envoyée à {client.email}.",
+             "username": user.username, "email": user.email},
+            status=200,
+        )
+
     @action(detail=True, methods=["get"])
     def overview(self, request, pk=None):
         """Fiche 360° — SPEC §4 : agrège projets, com, finance, juridique, tickets, docs."""

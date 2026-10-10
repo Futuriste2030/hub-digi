@@ -21,12 +21,10 @@ import {
   CalendarDays,
   Bug,
   Link2,
-  Copy,
   Banknote,
   ScrollText,
   ReceiptText,
   KeyRound,
-  RotateCcw,
   MonitorSmartphone,
 } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
@@ -36,8 +34,8 @@ import { CHEFS, ROLES_ADMIN, ROLES_COM, ROLES_DEV, ROLES_FINANCE, ROLES_JURIDIQU
 import { fCFA } from '../utils/stats.js';
 import { overviewClient } from '../api/finance.js';
 import { payerFacture, telechargerPdf } from '../api/finance.js';
-import { creerCompteClient, genererMdp, genererUsername } from '../api/clients.js';
-import { envoyerMail, listerUsers, resetUserPassword } from '../api/ressources.js';
+import { envoyerInvitationClient } from '../api/clients.js';
+import { listerUsers } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
 import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
 import { NonTrouve } from './Pages.jsx';
@@ -157,7 +155,7 @@ function adapterOverview(ov) {
   };
 }
 
-function OngletApercu({ client, compte, mdpAcces, onResetMdp, onCopier, onEnvoyerAcces, envoi, peutEcrire }) {
+function OngletApercu({ client, compte, onEnvoyerAcces, envoi, peutEcrire, invitationEnvoyee }) {
   const coordonnees = [
     { Icone: User, html: <><strong className="font-semibold text-gris-900">{client.contact}</strong></> },
     { Icone: Mail, html: <span className="font-mono text-[13px]">{client.email || '—'}</span> },
@@ -218,36 +216,24 @@ function OngletApercu({ client, compte, mdpAcces, onResetMdp, onCopier, onEnvoye
             <span className="text-gris-600">Identifiant</span>
             <span className="font-mono text-[13px] text-gris-900">{compte?.username ?? '—'}</span>
           </p>
-          {mdpAcces ? (
-            <p className="flex items-center justify-between gap-esp-2 rounded-md bg-gris-100 p-esp-2">
-              <span className="text-gris-600">Mot de passe</span>
-              <span className="flex items-center gap-esp-2">
-                <span className="font-mono text-[13px] font-bold text-gris-900">{mdpAcces}</span>
-                <button
-                  type="button"
-                  onClick={onCopier}
-                  title="Copier le mot de passe"
-                  aria-label="Copier le mot de passe"
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-digi-texte hover:bg-digi-voile"
-                >
-                  <Copy size={20} aria-hidden="true" />
-                </button>
-              </span>
-            </p>
-          ) : (
-            <p className="dg-legende">Régénérez pour afficher le mot de passe ici — rien n est envoyé.</p>
+          <p className="flex items-center justify-between gap-esp-2">
+            <span className="text-gris-600">Compte</span>
+            <span className="font-courant text-[13px] font-semibold text-gris-900">{compte ? 'Créé' : 'Aucun compte'}</span>
+          </p>
+          {invitationEnvoyee && (
+            <p className="dg-legende">Invitation envoyée — lien d activation 24h. Renvoyer invalide le précédent.</p>
+          )}
+          {!compte && !invitationEnvoyee && (
+            <p className="dg-legende">Aucun mot de passe n est généré : l invitation crée le compte et envoie un lien 24h.</p>
           )}
           {peutEcrire && (
             <span className="flex flex-wrap gap-esp-2">
-              <Button taille="sm" variante="secondaire" onClick={onResetMdp}>
-                <RotateCcw size={16} aria-hidden="true" /> {compte ? 'Régénérer' : 'Créer le compte'}
-              </Button>
-              <Button taille="sm" onClick={onEnvoyerAcces} disabled={envoi} title="Envoyer le template avec identifiants + lien espace">
-                <Mail size={16} aria-hidden="true" /> {envoi ? 'Envoi…' : 'Envoyer par mail'}
+              <Button taille="sm" onClick={onEnvoyerAcces} disabled={envoi} title="Créer le compte si besoin + envoyer le lien d'activation 24h">
+                <Mail size={16} aria-hidden="true" /> {envoi ? 'Envoi…' : compte ? "Renvoyer l'invitation" : 'Envoyer l invitation'}
               </Button>
             </span>
           )}
-          <p className="dg-legende">Seul « Envoyer par mail » transmet au client. La régénération reste à l écran.</p>
+          <p className="dg-legende">Le client définit lui-même son mot de passe via le lien. Aucun mot de passe par mail.</p>
         </CardBody>
         )}
       </Card>
@@ -566,15 +552,14 @@ export default function FicheClient() {
   const [introuvable, setIntrouvable] = useState(false);
   const [erreurChargement, setErreurChargement] = useState('');
   const [compte, setCompte] = useState(null);
-  const [mdpAcces, setMdpAcces] = useState('');
   const [envoiAcces, setEnvoiAcces] = useState(false);
+  const [invitationEnvoyee, setInvitationEnvoyee] = useState(false);
 
   const charger = async () => {
     setErreurChargement('');
     try {
       const ov = await overviewClient(id);
       setClient(adapterOverview(ov));
-      setMdpAcces('');
       try {
         const us = await listerUsers({ client: id, role: 'client' });
         setCompte(us[0] ?? null);
@@ -603,44 +588,8 @@ export default function FicheClient() {
   const ongletActif = ongletsVisibles.some((o) => o.id === onglet) ? onglet : 'apercu';
   const voitProjets = ongletsVisibles.some((o) => o.id === 'projets');
 
-  /* Accès espace : Régénérer affiche le mot de passe (aucun envoi).
-     Envoyer transmet TOUJOURS tous les identifiants affichés (anti double-clic). */
-
-  const resetMdp = async () => {
-    if (client?.est_interne) {
-      notifier({ type: 'info', titre: 'Client interne', texte: 'Aucun compte espace client pour un client interne.' });
-      return;
-    }
-    const mdp = genererMdp();
-    try {
-      if (compte) {
-        await resetUserPassword(compte.id, mdp);
-      } else {
-        if (!client?.email) {
-          notifier({ type: 'info', titre: 'E-mail manquant', texte: 'Renseignez l e-mail sur la fiche client.' });
-          return;
-        }
-        const cree = await creerCompteClient({
-          clientId: client.id, email: client.email,
-          username: genererUsername(client.societe), password: mdp,
-        });
-        setCompte({ id: cree.id, username: cree.username });
-      }
-      setMdpAcces(mdp);
-      notifier({ type: 'succes', titre: 'Mot de passe régénéré', texte: 'Affiché ci-dessous — copiez-le ou envoyez-le par mail.' });
-    } catch (e) {
-      notifier({ type: 'info', titre: 'Régénération impossible', texte: messageErreur(e) });
-    }
-  };
-
-  const copierMdp = async () => {
-    try {
-      await navigator.clipboard.writeText(mdpAcces);
-    } catch {
-      /* presse-papiers indisponible */
-    }
-    notifier({ type: 'info', titre: 'Mot de passe copié', texte: 'Collez-le où besoin, sans l envoyer.' });
-  };
+  /* Accès espace : invitation sécurisée — le back crée le compte sans mdp si
+     besoin puis envoie identifiant + lien d'activation 24h (aucun mdp par mail). */
 
   const envoyerAcces = async () => {
     if (client?.est_interne) {
@@ -648,42 +597,25 @@ export default function FicheClient() {
       return;
     }
     if (envoiAcces) return;
-    let username = compte?.username;
-    let mdp = mdpAcces;
-    /* Sans mot de passe affiché : on régénère (ou crée le compte) puis on envoie tout. */
-    if (!username || !mdp) {
-      const nouveau = genererMdp();
-      try {
-        if (compte) {
-          await resetUserPassword(compte.id, nouveau);
-        } else {
-          if (!client?.email) {
-            notifier({ type: 'info', titre: 'E-mail manquant', texte: 'Renseignez l e-mail sur la fiche client.' });
-            return;
-          }
-          const cree = await creerCompteClient({
-            clientId: client.id, email: client.email,
-            username: genererUsername(client.societe), password: nouveau,
-          });
-          username = cree.username;
-          setCompte({ id: cree.id, username: cree.username });
-        }
-        mdp = nouveau;
-        setMdpAcces(nouveau);
-      } catch (e) {
-        notifier({ type: 'info', titre: 'Préparation impossible', texte: messageErreur(e) });
-        return;
-      }
+    if (!client?.email) {
+      notifier({ type: 'info', titre: 'E-mail manquant', texte: "Renseignez l'e-mail sur la fiche client." });
+      return;
     }
     setEnvoiAcces(true);
     try {
       const url = `${window.location.origin}${urlEspace(client)}`;
-      await envoyerMail({
-        to: client.email, subject: 'Bienvenue sur votre espace client',
-        body_html: `<p>Bonjour,</p><p>Votre espace client est ouvert : <a href="${url}">${url}</a></p><p>Identifiant : <strong>${username}</strong><br>Mot de passe : <strong>${mdp}</strong></p>`,
-        client: client.id,
-      });
-      notifier({ type: 'succes', titre: 'Mail d accès envoyé', texte: `Identifiants transmis à ${client.email} (un seul envoi).` });
+      const res = await envoyerInvitationClient(client.id, { espaceUrl: url });
+      if (res?.username) setCompte((c) => ({ ...(c ?? {}), username: res.username }));
+      else {
+        try {
+          const us = await listerUsers({ client: client.id, role: 'client' });
+          setCompte(us[0] ?? null);
+        } catch {
+          /* compte rafraîchi au prochain chargement */
+        }
+      }
+      setInvitationEnvoyee(true);
+      notifier({ type: 'succes', titre: 'Invitation envoyée', texte: `Lien d'activation 24h à ${client.email} — le client définit son mot de passe.` });
     } catch (e) {
       notifier({ type: 'info', titre: 'Envoi impossible', texte: messageErreur(e) });
     } finally {
@@ -773,7 +705,7 @@ export default function FicheClient() {
       </div>
 
       <div role="tabpanel" className="dg-fondu mt-esp-5" key={ongletActif}>
-        {ongletActif === 'apercu' && <OngletApercu client={client} compte={compte} mdpAcces={mdpAcces} onResetMdp={resetMdp} onCopier={copierMdp} onEnvoyerAcces={envoyerAcces} envoi={envoiAcces} peutEcrire={peutEcrire} />}
+        {ongletActif === 'apercu' && <OngletApercu client={client} compte={compte} onEnvoyerAcces={envoyerAcces} envoi={envoiAcces} peutEcrire={peutEcrire} invitationEnvoyee={invitationEnvoyee} />}
         {ongletActif === 'projets' && <OngletProjets client={client} peutOuvrir={voitProjets} />}
         {ongletActif === 'com' && <OngletCom client={client} />}
         {ongletActif === 'finance' && <OngletFinance key={client.id} client={client} notifier={notifier} onFait={charger} />}
