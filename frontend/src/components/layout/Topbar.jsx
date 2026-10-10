@@ -39,6 +39,7 @@ const TITRES = {
   '/juridique/contrats': 'Contrats',
   '/juridique/litiges': 'Litiges',
   '/secretariat/courriers': 'Courriers',
+  '/secretariat/documents': 'Offres & lettres',
   '/rh/employes': 'Employés',
   '/rh/conges': 'Congés',
   '/rh/recrutement': 'Recrutement',

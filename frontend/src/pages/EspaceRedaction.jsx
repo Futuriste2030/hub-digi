@@ -13,6 +13,7 @@ import {
   creerCommunique, creerContrat, creerLitige, listerCommuniques, listerContrats, listerEmployes,
   listerLitiges, majCommunique, majContrat, majLitige, supprimerCommunique, supprimerContrat,
 } from '../api/ressources.js';
+import { creerDocument, listerDocuments, majDocument, supprimerDocument } from '../api/tickets.js';
 import Cachet from '../components/finance/Cachet.jsx';
 import BoutonSupprimer from '../components/ui/BoutonSupprimer.jsx';
 import { listerClients } from '../api/clients.js';
@@ -44,6 +45,13 @@ export const CONFIGS = {
     destinataire: 'Destinataire',
     nouveau: 'Nouveau courrier',
   },
+  documents: {
+    surtitre: 'Secrétariat',
+    titre: 'Offres & lettres',
+    intro: 'Offres techniques et commerciales, lettres, attestations : rédaction libre, références auto, cachet Secrétariat.',
+    destinataire: 'Destinataire',
+    nouveau: 'Nouveau document',
+  },
   communiques: {
     surtitre: 'Communication',
     titre: 'Communiqués',
@@ -57,6 +65,26 @@ const MODELES_DEFAUT = {
   contrats: '<p>Entre les soussignés, il a été convenu ce qui suit…</p><p>Article 1 — Objet…</p>',
   litiges: '<p>Faits…</p><p>Position…</p><p>Issue proposée…</p>',
   communiques: '<p>Communiqué de presse…</p><p>Contact presse…</p>',
+  documents: '<p>…</p>',
+};
+
+const TYPES_DOCUMENT = [
+  { id: 'offre_technique', label: 'Offre technique' },
+  { id: 'offre_commerciale', label: 'Offre commerciale' },
+  { id: 'lettre', label: 'Lettre' },
+  { id: 'attestation', label: 'Attestation' },
+  { id: 'note', label: 'Note de service' },
+  { id: 'autre', label: 'Autre document' },
+];
+const TYPE_DOCUMENT_LABEL = Object.fromEntries(TYPES_DOCUMENT.map((t) => [t.id, t.label]));
+
+const MODELES_DOCUMENT = {
+  offre_technique: '<p>Objet : offre technique…</p><p>1. Contexte et besoins…</p><p>2. Solution proposée…</p><p>3. Planning et livrables…</p>',
+  offre_commerciale: '<p>Objet : offre commerciale…</p><p>1. Périmètre…</p><p>2. Conditions…</p><p>3. Validité de l offre…</p>',
+  lettre: '<p>Objet : …</p><p>Madame, Monsieur,…</p>',
+  attestation: '<p>Je soussigné… atteste que…</p><p>Fait pour servir et valoir ce que de droit.</p>',
+  note: '<p>Note de service…</p><p>…</p>',
+  autre: '<p>…</p>',
 };
 
 const TYPES_CONTRAT = [
@@ -70,6 +98,9 @@ const STATUT_LITIGE_TON = { ouvert: 'alerte', en_cours: 'info', resolu: 'succes'
 const TRANSITIONS_COMMUNIQUE = { brouillon: ['publie'], publie: [] };
 const STATUT_COMM_TON = { brouillon: 'neutre', publie: 'succes' };
 const STATUT_COMM_LABEL = { brouillon: 'Brouillon', publie: 'Publié' };
+const TRANSITIONS_DOCUMENT = { brouillon: ['valide'], valide: ['envoye'], envoye: ['archive'], archive: [] };
+const STATUT_DOC_LABEL = { brouillon: 'Brouillon', valide: 'Validé', envoye: 'Envoyé', archive: 'Archivé' };
+const STATUT_DOC_TON = { brouillon: 'neutre', valide: 'info', envoye: 'succes', archive: 'neutre' };
 
 const texteBrut = (html) => String(html ?? '').replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/g, ' ').trim();
 const dateFr = (iso) => {
@@ -81,6 +112,7 @@ const API_PAR_CATEGORIE = {
   contrats: { lister: listerContrats, creer: creerContrat, maj: majContrat, supprimer: supprimerContrat, roleSuppr: ['super_admin', 'chef_juridique'] },
   litiges: { lister: listerLitiges, creer: creerLitige, maj: majLitige },
   communiques: { lister: listerCommuniques, creer: creerCommunique, maj: majCommunique, supprimer: supprimerCommunique, roleSuppr: ['super_admin', 'chef_com'] },
+  documents: { lister: listerDocuments, creer: creerDocument, maj: majDocument, supprimer: supprimerDocument, roleSuppr: ['super_admin', 'admin'] },
 };
 
 export default function EspaceRedaction({ categorie }) {
@@ -95,6 +127,7 @@ export default function EspaceRedaction({ categorie }) {
   const [employeId, setEmployeId] = useState('');
   const [partie, setPartie] = useState('');
   const [typeContrat, setTypeContrat] = useState('client');
+  const [typeDoc, setTypeDoc] = useState('offre_technique');
   const [contenu, setContenu] = useState(MODELES_DEFAUT[categorie] ?? '<p>…</p>');
   const [erreur, setErreur] = useState('');
   const [docs, setDocs] = useState([]);
@@ -147,20 +180,27 @@ export default function EspaceRedaction({ categorie }) {
       return `${TYPE_CONTRAT_LABEL[d.type] ?? d.type} · ${cible}`;
     }
     if (categorie === 'litiges') return d.partie || d.client_nom || (d.client ? nomsClients[d.client] ?? '' : '') || 'Dossier interne';
+    if (categorie === 'documents') {
+      const cible = d.destinataire || d.client_nom || (d.client ? nomsClients[d.client] ?? '' : '') || '—';
+      return `${TYPE_DOCUMENT_LABEL[d.type] ?? d.type} · ${cible}${d.reference ? ` · ${d.reference}` : ''}`;
+    }
     return `${d.diffusion || 'Diffusion générale'}${d.client ? ` · ${nomsClients[d.client] ?? ''}` : ''}`;
   };
   const transitions = actif
     ? (categorie === 'litiges' ? TRANSITIONS_LITIGE[actif.statut] ?? []
-      : categorie === 'communiques' ? TRANSITIONS_COMMUNIQUE[actif.statut] ?? [] : [])
+      : categorie === 'communiques' ? TRANSITIONS_COMMUNIQUE[actif.statut] ?? []
+      : categorie === 'documents' ? TRANSITIONS_DOCUMENT[actif.statut] ?? [] : [])
     : [];
   const statutLabel = (d) => {
     if (categorie === 'litiges') return STATUT_LITIGE_LABEL[d.statut] ?? d.statut;
     if (categorie === 'communiques') return STATUT_COMM_LABEL[d.statut] ?? d.statut;
+    if (categorie === 'documents') return STATUT_DOC_LABEL[d.statut] ?? d.statut;
     return d.statut;
   };
   const statutTon = (d) => {
     if (categorie === 'litiges') return STATUT_LITIGE_TON[d.statut] ?? 'neutre';
     if (categorie === 'communiques') return STATUT_COMM_TON[d.statut] ?? 'neutre';
+    if (categorie === 'documents') return STATUT_DOC_TON[d.statut] ?? 'neutre';
     return 'info';
   };
 
@@ -172,7 +212,8 @@ export default function EspaceRedaction({ categorie }) {
     setEmployeId('');
     setPartie('');
     setTypeContrat('client');
-    setContenu(MODELES_DEFAUT[categorie] ?? '<p>…</p>');
+    setTypeDoc('offre_technique');
+    setContenu(categorie === 'documents' ? MODELES_DOCUMENT.offre_technique : MODELES_DEFAUT[categorie] ?? '<p>…</p>');
     setErreur('');
     setVue('editeur');
   };
@@ -180,14 +221,20 @@ export default function EspaceRedaction({ categorie }) {
   const modifier = (d) => {
     setDocId(d.id);
     setTitre(d.titre);
-    setDestinataire('');
+    setDestinataire(d.destinataire ?? d.diffusion ?? '');
     setClientId(d.client ?? '');
     setEmployeId(d.employe ?? '');
     setPartie(d.partie ?? '');
     setTypeContrat(d.type ?? 'client');
+    if (categorie === 'documents') setTypeDoc(d.type ?? 'offre_technique');
     setContenu(categorie === 'contrats' ? d.contenu || '' : categorie === 'litiges' ? d.description || '' : d.contenu || '');
     setErreur('');
     setVue('editeur');
+  };
+
+  const changerTypeDoc = (t) => {
+    setTypeDoc(t);
+    if (!docId) setContenu(MODELES_DOCUMENT[t] ?? '<p>…</p>');
   };
 
   const enregistrer = async () => {
@@ -208,7 +255,9 @@ export default function EspaceRedaction({ categorie }) {
       }
       : categorie === 'litiges'
         ? { titre: titre.trim(), client: clientId || null, partie: partie.trim(), description: contenu }
-        : { titre: titre.trim(), client: clientId || null, diffusion: destinataire.trim(), contenu };
+        : categorie === 'documents'
+          ? { titre: titre.trim(), type: typeDoc, client: clientId || null, destinataire: destinataire.trim(), contenu }
+          : { titre: titre.trim(), client: clientId || null, diffusion: destinataire.trim(), contenu };
     try {
       if (docId) {
         await apiCat.maj(docId, base);
@@ -267,6 +316,7 @@ export default function EspaceRedaction({ categorie }) {
     contrats: { roles: ROLES_JURIDIQUE, titre: 'Contrats réservés au Juridique', requis: 'Seuls les membres du département Juridique rédigent les contrats.', demande: 'Le Chef Juridique étudiera votre accès.' },
     litiges: { roles: ROLES_JURIDIQUE, titre: 'Litiges réservés au Juridique', requis: 'Seuls les membres du département Juridique suivent les litiges.', demande: 'Le Chef Juridique étudiera votre accès.' },
     courriers: { roles: ROLES_SECRETARIAT, titre: 'Courriers réservés au Secrétariat', requis: 'Seuls les membres du Secrétariat rédigent les courriers.', demande: 'Le Secrétariat étudiera votre accès.' },
+    documents: { roles: ROLES_SECRETARIAT, titre: 'Offres & lettres réservées au Secrétariat', requis: 'Seuls les membres du Secrétariat rédigent les offres et lettres.', demande: 'Le Secrétariat étudiera votre accès.' },
     communiques: { roles: ROLES_COM, titre: 'Communiqués réservés à la Communication', requis: 'Seuls les membres du département Communication rédigent les communiqués.', demande: 'Le Chef Communication étudiera votre accès.' },
   };
   const acces = ACCES_PAR_CATEGORIE[categorie];
@@ -338,6 +388,11 @@ export default function EspaceRedaction({ categorie }) {
               <Cachet entreprise={entreprise} cachetUrl={entreprise.cachetJuridique} signatureUrl={entreprise.signatureJuridique} />
             </div>
           )}
+          {categorie === 'documents' && entreprise.cachetSecretariat && (
+            <div className="mt-esp-5 flex justify-center">
+              <img src={entreprise.cachetSecretariat} alt="Cachet du Secrétariat" className="mx-auto h-28 w-auto object-contain" />
+            </div>
+          )}
           <div className="mt-esp-7 flex justify-end">
             <p className="border-t border-gris-400 px-esp-6 pt-esp-2 text-center font-courant text-[13px] text-gris-600">
               {categorie === 'contrats' && actif.signe_employe ? (
@@ -377,6 +432,14 @@ export default function EspaceRedaction({ categorie }) {
                 </select>
               </div>
             )}
+            {categorie === 'documents' && (
+              <div>
+                <Label htmlFor="doc-typedoc">Type de document</Label>
+                <select id="doc-typedoc" value={typeDoc} onChange={(e) => changerTypeDoc(e.target.value)} className="mt-esp-2 h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi">
+                  {TYPES_DOCUMENT.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </div>
+            )}
             {categorie === 'contrats' && typeContrat === 'employe' ? (
               <div>
                 <Label htmlFor="doc-employe">Employé concerné *</Label>
@@ -404,6 +467,12 @@ export default function EspaceRedaction({ categorie }) {
               <div>
                 <Label htmlFor="doc-dest">{config.destinataire}</Label>
                 <div className="mt-esp-2"><Input id="doc-dest" value={destinataire} onChange={(e) => setDestinataire(e.target.value)} placeholder="Ex. Presse nationale" /></div>
+              </div>
+            )}
+            {categorie === 'documents' && (
+              <div>
+                <Label htmlFor="doc-dest-doc">{config.destinataire}</Label>
+                <div className="mt-esp-2"><Input id="doc-dest-doc" value={destinataire} onChange={(e) => setDestinataire(e.target.value)} placeholder="Ex. Direction Générale — Sonatel" /></div>
               </div>
             )}
             {erreur && <p role="alert" className="font-courant text-[15px] text-erreur">{erreur}</p>}

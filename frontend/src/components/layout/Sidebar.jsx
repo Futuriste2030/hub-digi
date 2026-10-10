@@ -123,6 +123,7 @@ const SECTIONS = [
     liens: [
       { to: '/tickets', libelle: 'Tickets', Icone: Ticket, roles: [...CHEFS, 'membre_com', 'membre_dev', 'membre_finance', 'membre_rh', 'membre_juridique'] },
       { to: '/secretariat/courriers', libelle: 'Courriers', Icone: Mails, roles: ROLES_SECRETARIAT },
+      { to: '/secretariat/documents', libelle: 'Offres & lettres', Icone: FileText, roles: ROLES_SECRETARIAT },
       { to: '/secretariat/decharges', libelle: 'Décharges', Icone: FileCheck, roles: ROLES_SECRETARIAT },
       { to: '/secretariat/reunions', libelle: 'Réunions', Icone: CalendarClock, roles: ROLES_SECRETARIAT },
     ],

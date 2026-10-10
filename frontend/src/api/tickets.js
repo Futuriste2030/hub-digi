@@ -16,6 +16,10 @@ export const listerCourriers = (params) => toutLister('/secretariat/courriers/',
 export const creerCourrier = (payload) => post('/secretariat/courriers/', payload);
 export const majCourrier = (id, payload) => patch(`/secretariat/courriers/${id}/`, payload);
 export const supprimerCourrier = (id) => suppr(`/secretariat/courriers/${id}/`);
+export const listerDocuments = (params) => toutLister('/secretariat/documents/', params);
+export const creerDocument = (payload) => post('/secretariat/documents/', payload);
+export const majDocument = (id, payload) => patch(`/secretariat/documents/${id}/`, payload);
+export const supprimerDocument = (id) => suppr(`/secretariat/documents/${id}/`);
 export const listerReunions = (params) => toutLister('/secretariat/reunions/', params);
 export const detailReunion = (id) => get(`/secretariat/reunions/${id}/`);
 export const creerReunion = (payload) => post('/secretariat/reunions/', payload);

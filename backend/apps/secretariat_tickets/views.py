@@ -1,4 +1,4 @@
-"""Tickets/secrétariat API — SPEC §5.2/§7 : qualify/request-approval/reply + réunions/courriers."""
+"""Tickets/secrétariat API — SPEC §5.2/§7 : qualify/request-approval/reply + réunions/courriers/documents."""
 
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from apps.projects_dev.models import Task
 
-from .models import Courrier, Decharge, DecisionReunion, Reunion, Ticket, TicketApproval, TicketMessage
+from .models import Courrier, Decharge, DecisionReunion, DocumentSecretariat, Reunion, Ticket, TicketApproval, TicketMessage
 
 
 class TicketMessageSerializer(serializers.ModelSerializer):
@@ -188,6 +188,34 @@ class CourrierViewSet(viewsets.ModelViewSet):
         obj = self.get_object()
         if obj.statut != Courrier.STATUT_BROUILLON:
             return Response({"detail": "Seul un courrier brouillon peut être supprimé."}, status=400)
+        return super().destroy(request, *args, **kwargs)
+
+
+class DocumentSecretariatSerializer(serializers.ModelSerializer):
+    client_nom = serializers.CharField(source="client.nom_societe", read_only=True)
+
+    class Meta:
+        model = DocumentSecretariat
+        fields = ["id", "reference", "type", "titre", "destinataire", "client", "client_nom",
+                  "contenu", "statut", "cree_le", "maj_le"]
+        read_only_fields = ["reference"]
+
+
+class DocumentSecretariatViewSet(viewsets.ModelViewSet):
+    """Offres/lettres Secrétariat : rédaction libre, workflow brouillon → validé → envoyé → archivé."""
+
+    queryset = DocumentSecretariat.objects.select_related("client").all()
+    serializer_class = DocumentSecretariatSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ["type", "statut", "client"]
+    search_fields = ["reference", "titre", "destinataire"]
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role not in ("super_admin", "admin"):
+            return Response({"detail": "Suppression réservée au Secrétariat."}, status=403)
+        obj = self.get_object()
+        if obj.statut != DocumentSecretariat.STATUT_BROUILLON:
+            return Response({"detail": "Seul un document brouillon peut être supprimé."}, status=400)
         return super().destroy(request, *args, **kwargs)
 
 

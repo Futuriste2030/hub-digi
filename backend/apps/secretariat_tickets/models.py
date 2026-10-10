@@ -1,4 +1,4 @@
-"""Tickets + Secrétariat — SPEC §5.2/§7 : Ticket, TicketMessage, TicketApproval, Courrier, Reunion, Decharge."""
+"""Tickets + Secrétariat — SPEC §5.2/§7 : Ticket, TicketMessage, TicketApproval, Courrier, Document, Reunion, Decharge."""
 
 from django.conf import settings
 from django.db import models
@@ -102,6 +102,68 @@ class Courrier(models.Model):
         if not self.reference:
             n = Courrier.objects.count() + 1
             self.reference = f"COUR-{timezone.now().year}-{n:04d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.reference
+
+
+class DocumentSecretariat(models.Model):
+    """Offres techniques/commerciales, lettres, attestations… — rédaction libre
+    Secrétariat (éditeur riche + en-tête + cachet, comme contrats/communiqués)."""
+
+    TYPE_OFFRE_TECHNIQUE = "offre_technique"
+    TYPE_OFFRE_COMMERCIALE = "offre_commerciale"
+    TYPE_LETTRE = "lettre"
+    TYPE_ATTESTATION = "attestation"
+    TYPE_NOTE = "note"
+    TYPE_AUTRE = "autre"
+    TYPES = [
+        (TYPE_OFFRE_TECHNIQUE, "Offre technique"),
+        (TYPE_OFFRE_COMMERCIALE, "Offre commerciale"),
+        (TYPE_LETTRE, "Lettre"),
+        (TYPE_ATTESTATION, "Attestation"),
+        (TYPE_NOTE, "Note de service"),
+        (TYPE_AUTRE, "Autre document"),
+    ]
+    PREFIXES = {
+        TYPE_OFFRE_TECHNIQUE: "OT",
+        TYPE_OFFRE_COMMERCIALE: "OC",
+        TYPE_LETTRE: "LET",
+        TYPE_ATTESTATION: "ATT",
+        TYPE_NOTE: "NOTE",
+        TYPE_AUTRE: "DOC",
+    }
+
+    STATUT_BROUILLON = "brouillon"
+    STATUT_VALIDE = "valide"
+    STATUT_ENVOYE = "envoye"
+    STATUT_ARCHIVE = "archive"
+    STATUTS = [(STATUT_BROUILLON, "Brouillon"), (STATUT_VALIDE, "Validé"),
+               (STATUT_ENVOYE, "Envoyé"), (STATUT_ARCHIVE, "Archivé")]
+
+    reference = models.CharField(max_length=50, unique=True, blank=True)
+    type = models.CharField(max_length=30, choices=TYPES, default=TYPE_LETTRE)
+    titre = models.CharField(max_length=255)
+    destinataire = models.CharField(max_length=255, blank=True)
+    client = models.ForeignKey("clients.Client", null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name="documents_secretariat")
+    contenu = models.TextField(blank=True)
+    statut = models.CharField(max_length=20, choices=STATUTS, default=STATUT_BROUILLON)
+    cree_le = models.DateTimeField(auto_now_add=True)
+    maj_le = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-cree_le"]
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            annee = timezone.now().year
+            prefixe = self.PREFIXES.get(self.type, "DOC")
+            dernier = DocumentSecretariat.objects.filter(
+                reference__startswith=f"{prefixe}-{annee}-").order_by("-reference").first()
+            seq = int(dernier.reference.rsplit("-", 1)[1]) + 1 if dernier else 1
+            self.reference = f"{prefixe}-{annee}-{seq:04d}"
         super().save(*args, **kwargs)
 
     def __str__(self):

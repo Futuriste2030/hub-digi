@@ -4,6 +4,7 @@ from .models import (
     Courrier,
     Decharge,
     DecisionReunion,
+    DocumentSecretariat,
     Reunion,
     Ticket,
     TicketApproval,
@@ -41,6 +42,13 @@ class CourrierAdmin(admin.ModelAdmin):
     list_display = ("reference", "sens", "objet", "statut", "date")
     list_filter = ("sens", "statut")
     search_fields = ("reference", "objet")
+
+
+@admin.register(DocumentSecretariat)
+class DocumentSecretariatAdmin(admin.ModelAdmin):
+    list_display = ("reference", "type", "titre", "statut", "cree_le")
+    list_filter = ("type", "statut")
+    search_fields = ("reference", "titre", "destinataire")
 
 
 @admin.register(Reunion)

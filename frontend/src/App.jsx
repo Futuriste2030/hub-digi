@@ -108,6 +108,7 @@ export default function App() {
             <Route path="juridique/contrats" element={<RequireRole roles={ROLES_JURIDIQUE}><EspaceRedaction categorie="contrats" /></RequireRole>} />
             <Route path="juridique/litiges" element={<RequireRole roles={ROLES_JURIDIQUE}><EspaceRedaction categorie="litiges" /></RequireRole>} />
             <Route path="secretariat/courriers" element={<RequireRole roles={ROLES_SECRETARIAT}><Courriers /></RequireRole>} />
+            <Route path="secretariat/documents" element={<RequireRole roles={ROLES_SECRETARIAT}><EspaceRedaction categorie="documents" /></RequireRole>} />
             <Route path="secretariat/decharges" element={<RequireRole roles={ROLES_SECRETARIAT}><Decharges /></RequireRole>} />
             <Route path="secretariat/reunions" element={<RequireRole roles={ROLES_SECRETARIAT}><Reunions /></RequireRole>} />
             <Route path="com/communiques" element={<RequireRole roles={ROLES_COM}><EspaceRedaction categorie="communiques" /></RequireRole>} />

@@ -44,6 +44,7 @@ NAVIGATION = [
     ({"contrats", "contrat"}, "Contrats", "/juridique/contrats", "juridique"),
     ({"litiges", "litige"}, "Litiges", "/juridique/litiges", "juridique"),
     ({"courriers", "courrier"}, "Courriers", "/secretariat/courriers", "secretariat"),
+    ({"offres", "offre", "lettres", "lettre", "attestations", "documents"}, "Offres & lettres", "/secretariat/documents", "secretariat"),
     ({"decharges", "décharges"}, "Décharges", "/secretariat/decharges", "secretariat"),
     ({"reunions", "réunions", "pv"}, "Réunions", "/secretariat/reunions", "secretariat"),
     ({"employes", "employés"}, "Employés", "/rh/employes", "rh"),
@@ -158,12 +159,16 @@ class RechercheGlobaleView(APIView):
                 groupes.append(("facture", f))
         # Courriers (référence, objet, expéditeur, destinataire) — secrétariat.
         if peut("super_admin", "admin"):
-            from apps.secretariat_tickets.models import Courrier
+            from apps.secretariat_tickets.models import Courrier, DocumentSecretariat
 
             for c in Courrier.objects.filter(
                     Q(reference__icontains=q) | Q(objet__icontains=q)
                     | Q(expediteur__icontains=q) | Q(destinataire__icontains=q))[:8]:
                 groupes.append(("courrier", c))
+            for d in DocumentSecretariat.objects.filter(
+                    Q(reference__icontains=q) | Q(titre__icontains=q)
+                    | Q(destinataire__icontains=q))[:8]:
+                groupes.append(("document-secretariat", d))
         # Campagnes (titre, objectifs, client) — com + super_admin.
         if peut("super_admin", "chef_com", "membre_com"):
             from apps.com.models import Campaign
@@ -232,5 +237,8 @@ def _fiche(type_, obj):
     if type_ == "facture":
         return {"id": obj.id, "type": type_, "titre": getattr(obj, "numero", str(obj)),
                 "reference": getattr(obj, "numero", ""), "url": f"/factures/{getattr(obj, 'numero', obj.id)}"}
+    if type_ == "document-secretariat":
+        return {"id": obj.id, "type": type_, "titre": f"{getattr(obj, 'reference', '')} — {getattr(obj, 'titre', '')}",
+                "reference": getattr(obj, "reference", ""), "url": "/secretariat/documents"}
     return {"id": obj.id, "type": type_, "titre": getattr(obj, "reference", str(obj)),
             "reference": getattr(obj, "reference", ""), "url": "/secretariat/courriers"}
