@@ -151,6 +151,7 @@ function adapterOverview(ov) {
     })),
     contrats: ov.juridique.map((k) => ({
       id: k.id, titre: k.titre, statut: k.statut, ton: 'info', type: k.type, fin: dateFr(k.date_fin),
+      signe: !!k.signe_employe,
     })),
     tickets: ov.tickets.map((t) => {
       const [statut, ton] = STATUTS_TICKET[t.statut] ?? [t.statut, 'neutre'];
@@ -478,11 +479,11 @@ function OngletJuridique({ client, peutSupprimer, onSupprimer }) {
               <TitreCarte Icone={ScrollText}>{c.titre}</TitreCarte>
               <span className="flex items-center gap-esp-1">
                 <Badge ton={c.ton}>{c.statut}</Badge>
-                {peutSupprimer && c.statut === 'brouillon' && (
+                {peutSupprimer && ['brouillon', 'actif'].includes(c.statut) && !c.signe && (
                   <BoutonSupprimer
                     titre={`Supprimer ${c.titre}`}
                     libelle={c.titre}
-                    texte="Supprimer définitivement le contrat brouillon"
+                    texte="Supprimer définitivement le contrat"
                     onConfirmer={() => onSupprimer(c)}
                   />
                 )}

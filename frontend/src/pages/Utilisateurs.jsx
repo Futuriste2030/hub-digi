@@ -19,6 +19,118 @@ const selectCls = 'h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg
    (ex. DG), sans département. Les clients restent créés via la Fiche Client. */
 const ROLES = Object.keys(LIBELLES_ROLE).filter((r) => r !== 'client');
 
+/* Modale au niveau module — JAMAIS imbriquée dans le composant : sinon React
+   la démonte à chaque rendu du parent (perte de focus, saisie impossible). */
+function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistrer }) {
+  const [form, setForm] = useState({
+    email: user.email ?? '',
+    first_name: user.first_name ?? '', last_name: user.last_name ?? '', role: user.role,
+    department: user.department?.toString() ?? '', poste: user.poste?.toString() ?? '',
+  });
+  const [erreur, setErreur] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+  const champ = (k) => ({
+    value: form[k],
+    onChange: (e) => {
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+      setErreur('');
+    },
+  });
+  const selectModalCls = 'mt-esp-2 h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi';
+  const postesDept = postes.filter((p) => String(p.department) === String(form.department));
+
+  const changerDepartement = (id) => {
+    const duDept = postes.filter((p) => String(p.department) === String(id));
+    setForm((f) => ({ ...f, department: id, poste: duDept[0]?.id?.toString() ?? '' }));
+    setErreur('');
+  };
+
+  const soumettre = async (e) => {
+    e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setErreur("Adresse e-mail pro invalide.");
+      return;
+    }
+    if (form.role !== 'client' && form.role !== 'super_admin' && !form.department) {
+      setErreur('Choisissez le département.');
+      return;
+    }
+    setEnvoi(true);
+    try {
+      await onEnregistrer(user.id, {
+        email: form.email.trim().toLowerCase(),
+        first_name: form.first_name.trim(), last_name: form.last_name.trim(), role: form.role,
+        department: form.role === 'super_admin' ? null : Number(form.department) || null,
+        poste: form.poste ? Number(form.poste) : null,
+      });
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-esp-4" role="dialog" aria-modal="true" aria-label={`Modifier ${user.email}`}>
+      <div className="dg-fondu absolute inset-0 bg-marine-profond/60" onClick={onFermer} />
+      <form onSubmit={soumettre} className="dg-pop relative max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
+        <div className="flex items-start justify-between gap-esp-3">
+          <div>
+            <p className="dg-surtitre">Système · Super Admin</p>
+            <h2 className="!text-[26px]">Modifier {user.email}</h2>
+          </div>
+          <button type="button" onClick={onFermer} aria-label="Fermer" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200">
+            <X size={20} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="mt-esp-5 flex flex-col gap-esp-4">
+          <div>
+            <Label htmlFor="mu-email">Adresse e-mail pro *</Label>
+            <div className="mt-esp-2"><Input id="mu-email" type="email" {...champ('email')} placeholder="prenom.nom@digicom.ml" /></div>
+          </div>
+          <div className="grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="mu-prenom">Prénom</Label>
+              <div className="mt-esp-2"><Input id="mu-prenom" autoFocus {...champ('first_name')} placeholder="Ex. Moussa" /></div>
+            </div>
+            <div>
+              <Label htmlFor="mu-nom">Nom</Label>
+              <div className="mt-esp-2"><Input id="mu-nom" {...champ('last_name')} placeholder="Ex. Koné" /></div>
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="mu-role">Rôle</Label>
+            <select id="mu-role" {...champ('role')} className={selectModalCls}>
+              {ROLES.map((r) => <option key={r} value={r}>{LIBELLES_ROLE[r]}</option>)}
+            </select>
+          </div>
+          {form.role !== 'super_admin' && form.role !== 'client' && (
+            <>
+              <div>
+                <Label htmlFor="mu-dept">Département</Label>
+                <select id="mu-dept" value={form.department} onChange={(e) => changerDepartement(e.target.value)} className={selectModalCls}>
+                  <option value="">— Choisir —</option>
+                  {departements.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="mu-poste">Poste</Label>
+                <select id="mu-poste" {...champ('poste')} className={selectModalCls}>
+                  <option value="">— Aucun —</option>
+                  {postesDept.map((p) => <option key={p.id} value={p.id}>{p.titre} ({p.niveau})</option>)}
+                </select>
+              </div>
+            </>
+          )}
+          {erreur && <p role="alert" className="font-courant text-[15px] text-erreur">{erreur}</p>}
+        </div>
+        <div className="mt-esp-6 flex justify-end gap-esp-3">
+          <Button variante="fantome" onClick={onFermer}>Annuler</Button>
+          <Button type="submit" chargement={envoi}><Save size={20} aria-hidden="true" /> Enregistrer</Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Utilisateurs() {
   const { notifier, session } = useOutletContext();
   const [recherche, setRecherche] = useState('');
@@ -107,116 +219,6 @@ export default function Utilisateurs() {
   };
 
   const nomAffiche = (u) => [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username;
-
-function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistrer }) {
-  const [form, setForm] = useState({
-    email: user.email ?? '',
-    first_name: user.first_name ?? '', last_name: user.last_name ?? '', role: user.role,
-    department: user.department?.toString() ?? '', poste: user.poste?.toString() ?? '',
-  });
-  const [erreur, setErreur] = useState('');
-  const [envoi, setEnvoi] = useState(false);
-  const champ = (k) => ({
-    value: form[k],
-    onChange: (e) => {
-      setForm((f) => ({ ...f, [k]: e.target.value }));
-      setErreur('');
-    },
-  });
-  const selectCls = 'mt-esp-2 h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi';
-  const postesDept = postes.filter((p) => String(p.department) === String(form.department));
-
-  const changerDepartement = (id) => {
-    const duDept = postes.filter((p) => String(p.department) === String(id));
-    setForm((f) => ({ ...f, department: id, poste: duDept[0]?.id?.toString() ?? '' }));
-    setErreur('');
-  };
-
-  const soumettre = async (e) => {
-    e.preventDefault();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      setErreur("Adresse e-mail pro invalide.");
-      return;
-    }
-    if (form.role !== 'client' && form.role !== 'super_admin' && !form.department) {
-      setErreur('Choisissez le département.');
-      return;
-    }
-    setEnvoi(true);
-    try {
-      await onEnregistrer(user.id, {
-        email: form.email.trim().toLowerCase(),
-        first_name: form.first_name.trim(), last_name: form.last_name.trim(), role: form.role,
-        department: form.role === 'super_admin' ? null : Number(form.department) || null,
-        poste: form.poste ? Number(form.poste) : null,
-      });
-    } finally {
-      setEnvoi(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-esp-4" role="dialog" aria-modal="true" aria-label={`Modifier ${user.email}`}>
-      <div className="dg-fondu absolute inset-0 bg-marine-profond/60" onClick={onFermer} />
-      <form onSubmit={soumettre} className="dg-pop relative max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
-        <div className="flex items-start justify-between gap-esp-3">
-          <div>
-            <p className="dg-surtitre">Système · Super Admin</p>
-            <h2 className="!text-[26px]">Modifier {user.email}</h2>
-          </div>
-          <button type="button" onClick={onFermer} aria-label="Fermer" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200">
-            <X size={20} aria-hidden="true" />
-          </button>
-        </div>
-        <div className="mt-esp-5 flex flex-col gap-esp-4">
-          <div>
-            <Label htmlFor="mu-email">Adresse e-mail pro *</Label>
-            <div className="mt-esp-2"><Input id="mu-email" type="email" {...champ('email')} placeholder="prenom.nom@digicom.ml" /></div>
-          </div>
-          <div className="grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="mu-prenom">Prénom</Label>
-              <div className="mt-esp-2"><Input id="mu-prenom" autoFocus {...champ('first_name')} placeholder="Ex. Moussa" /></div>
-            </div>
-            <div>
-              <Label htmlFor="mu-nom">Nom</Label>
-              <div className="mt-esp-2"><Input id="mu-nom" {...champ('last_name')} placeholder="Ex. Koné" /></div>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="mu-role">Rôle</Label>
-            <select id="mu-role" {...champ('role')} className={selectCls}>
-              {ROLES.map((r) => <option key={r} value={r}>{LIBELLES_ROLE[r]}</option>)}
-            </select>
-          </div>
-          {form.role !== 'super_admin' && form.role !== 'client' && (
-            <>
-              <div>
-                <Label htmlFor="mu-dept">Département</Label>
-                <select id="mu-dept" value={form.department} onChange={(e) => changerDepartement(e.target.value)} className={selectCls}>
-                  <option value="">— Choisir —</option>
-                  {departements.map((d) => <option key={d.id} value={d.id}>{d.nom}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="mu-poste">Poste</Label>
-                <select id="mu-poste" {...champ('poste')} className={selectCls}>
-                  <option value="">— Aucun —</option>
-                  {postesDept.map((p) => <option key={p.id} value={p.id}>{p.titre} ({p.niveau})</option>)}
-                </select>
-              </div>
-            </>
-          )}
-          {erreur && <p role="alert" className="font-courant text-[15px] text-erreur">{erreur}</p>}
-        </div>
-        <div className="mt-esp-6 flex justify-end gap-esp-3">
-          <Button variante="fantome" onClick={onFermer}>Annuler</Button>
-          <Button type="submit" chargement={envoi}><Save size={20} aria-hidden="true" /> Enregistrer</Button>
-        </div>
-      </form>
-    </div>
-  );
-}
 
   const corps = (u, mobile = false) => (
     <>
@@ -347,7 +349,7 @@ function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistre
       </div>
       </>
       )}
-      {modifie && <ModaleModifierUser user={modifie} departements={departements} postes={postes} onFermer={() => setModifie(null)} onEnregistrer={enregistrerModification} />}
+      {modifie && <ModaleModifierUser key={modifie.id} user={modifie} departements={departements} postes={postes} onFermer={() => setModifie(null)} onEnregistrer={enregistrerModification} />}
     </div>
   );
 }

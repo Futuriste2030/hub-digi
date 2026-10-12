@@ -299,7 +299,7 @@ export default function EspaceRedaction({ categorie }) {
     if (!apiCat.supprimer) return;
     try {
       await apiCat.supprimer(d.id);
-      notifier({ type: 'succes', titre: 'Document supprimé', texte: `${d.titre} — brouillon effacé.` });
+      notifier({ type: 'succes', titre: 'Document supprimé', texte: `${d.titre} — effacé définitivement.` });
       if (actif?.id === d.id) setVue('liste');
       charger();
     } catch (e) {
@@ -309,6 +309,9 @@ export default function EspaceRedaction({ categorie }) {
   const peutSupprimerDoc = (d) => {
     if (!apiCat.supprimer) return false;
     if (!(apiCat.roleSuppr ?? []).includes(session?.role)) return false;
+    /* Contrats : créés « actif » sans workflow brouillon -> supprimables tant
+       que non signés électroniquement. Autres catégories : brouillon seul. */
+    if (categorie === 'contrats') return ['brouillon', 'actif'].includes(d.statut) && !d.signe_employe;
     return d.statut === 'brouillon';
   };
 
@@ -359,7 +362,7 @@ export default function EspaceRedaction({ categorie }) {
             <BoutonSupprimer
               titre={`Supprimer ${actif.titre}`}
               libelle={actif.titre}
-              texte="Supprimer définitivement le document brouillon"
+              texte="Supprimer définitivement ce document"
               onConfirmer={() => supprimer(actif)}
             />
           )}
@@ -525,7 +528,7 @@ export default function EspaceRedaction({ categorie }) {
                 <BoutonSupprimer
                   titre={`Supprimer ${d.titre}`}
                   libelle={d.titre}
-                  texte="Supprimer définitivement le document brouillon"
+                  texte="Supprimer définitivement ce document"
                   onConfirmer={() => supprimer(d)}
                 />
               )}

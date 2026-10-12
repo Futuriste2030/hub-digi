@@ -94,8 +94,10 @@ class ContractViewSet(viewsets.ModelViewSet):
         if request.user.role not in ("super_admin", "chef_juridique"):
             return Response({"detail": "Suppression réservée au Chef Juridique."}, status=403)
         obj = self.get_object()
-        if obj.statut != "brouillon":
-            return Response({"detail": "Seul un contrat brouillon peut être supprimé."}, status=400)
+        if obj.est_signe_employe:
+            return Response({"detail": "Contrat signé électroniquement : suppression impossible (valeur juridique)."}, status=400)
+        if obj.statut not in ("brouillon", "actif"):
+            return Response({"detail": "Seul un contrat brouillon ou actif non signé peut être supprimé."}, status=400)
         if obj.fichier:
             obj.fichier.delete(save=False)
         return super().destroy(request, *args, **kwargs)
