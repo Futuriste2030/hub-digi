@@ -91,9 +91,24 @@ class SentMail(models.Model):
         adresse = self.identity.from_address if self.identity else None
         expediteur = f"Digi Com & Technologies <{adresse}>" if adresse else None
         texte_brut = strip_tags(corps).replace("&nbsp;", " ").strip() or self.subject
+        # Délivrabilité (anti-spam) : Message-ID aligné sur le domaine expéditeur
+        # (sinon hostname du VPS -> signal de phishing), Reply-To explicite,
+        # désinscription mailto (exigée par Gmail/Outlook) et blocage des
+        # réponses automatiques (boucles « absent du bureau »).
+        from django.core.mail.message import make_msgid
+
+        domaine = (adresse or "").split("@")[-1].strip().lower() or "digicom.ml"
+        entetes = {
+            "Message-ID": make_msgid(domain=domaine),
+            "X-Auto-Response-Suppress": "All",
+            "Auto-Submitted": "no",
+        }
+        if adresse:
+            entetes["List-Unsubscribe"] = f"<mailto:{adresse}?subject=desinscription>"
         try:
             message = EmailMultiAlternatives(
-                self.subject, texte_brut, expediteur, [self.to], cc=self.liste_cc)
+                self.subject, texte_brut, expediteur, [self.to], cc=self.liste_cc,
+                reply_to=[adresse] if adresse else None, headers=entetes)
             message.attach_alternative(self.body_html, "text/html")
             message.send(fail_silently=False)
             self.statut = self.STATUT_ENVOYE
