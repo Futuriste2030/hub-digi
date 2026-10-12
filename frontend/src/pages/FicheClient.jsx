@@ -609,7 +609,7 @@ function ModaleEditClient({ client, onFermer, onEnregistrer }) {
           <div>
             <Label htmlFor="mc-email">E-mail pro *</Label>
             <div className="mt-esp-2"><Input id="mc-email" type="email" {...champ('email')} placeholder="contact@societe.ml" /></div>
-            <p className="dg-legende mt-esp-1">Si vous changez cet e-mail, l accès espace est réinitialisé et un nouveau lien 24h est envoyé automatiquement.</p>
+            <p className="dg-legende mt-esp-1">Si vous changez cet e-mail, l accès est réinitialisé (ancien lien invalidé, mot de passe à redéfinir). Cliquez ensuite sur « Envoyer l invitation » : la nouvelle adresse recevra le lien 24h.</p>
           </div>
           <div className="grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
             <div>
@@ -719,7 +719,8 @@ export default function FicheClient() {
       await majClient(client.id, payload);
       setModaleEdit(false);
       if (emailChange) {
-        notifier({ type: 'succes', titre: 'Coordonnées mises à jour', texte: `Nouvel e-mail ${payload.email} — accès réinitialisé, nouveau lien 24h envoyé automatiquement.` });
+        setInvitationEnvoyee(false);
+        notifier({ type: 'succes', titre: 'Coordonnées mises à jour', texte: `Nouvel e-mail ${payload.email} — accès réinitialisé (mot de passe à redéfinir). Cliquez sur « Envoyer l invitation » pour transmettre le lien 24h.` });
       } else {
         notifier({ type: 'succes', titre: 'Coordonnées mises à jour', texte: 'Fiche client modifiée.' });
       }
