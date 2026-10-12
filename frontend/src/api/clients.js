@@ -1,5 +1,5 @@
 import { api } from './client.js';
-import { suppr } from './base.js';
+import { patch, suppr } from './base.js';
 
 /* Ressource Clients — DRF /clients/ (SPEC §4). */
 
@@ -13,6 +13,7 @@ export async function creerClient(payload) {
   return data;
 }
 
+export const majClient = (id, payload) => patch(`/clients/${id}/`, payload);
 export const supprimerClient = (id) => suppr(`/clients/${id}/`);
 
 /* Compte espace client créé SANS mot de passe (set_unusable_password côté back).

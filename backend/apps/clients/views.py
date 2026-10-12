@@ -30,6 +30,45 @@ class ClientViewSet(viewsets.ModelViewSet):
             return qs.filter(id=user.client_id)
         return qs
 
+    def perform_update(self, serializer):
+        ancien_email = ""
+        try:
+            ancien_email = (Client.objects.filter(pk=self.get_object().pk).values_list("email", flat=True).first() or "").strip().lower()
+        except Exception:
+            ancien_email = ""
+        client = serializer.save()
+        nouvel_email = (client.email or "").strip().lower()
+        # Coordonnées modifiées -> accès réinitialisé : si l'e-mail change,
+        # on synchronise le compte espace client et on renvoie automatiquement
+        # un nouveau lien d'activation 24h (ancien lien invalidé).
+        if ancien_email != nouvel_email and nouvel_email and not client.est_interne:
+            try:
+                from django.conf import settings
+                from django.contrib.auth.tokens import default_token_generator
+                from django.utils.encoding import force_bytes
+                from django.utils.http import urlsafe_base64_encode
+
+                from apps.accounts.models import User
+                from apps.mailing.services import send_templated_mail
+
+                user = User.objects.filter(role="client", client=client).order_by("id").first()
+                if user is not None:
+                    if (user.email or "").strip().lower() != nouvel_email:
+                        user.email = client.email
+                        user.save(update_fields=["email"])
+                    uid = urlsafe_base64_encode(force_bytes(user.pk))
+                    token = default_token_generator.make_token(user)
+                    send_templated_mail(
+                        "bienvenue_espace_client", client.email,
+                        {"societe": client.nom_societe, "username": user.username,
+                         "espace_url": f"{settings.FRONTEND_URL}/espace/{client.slug}/{client.code}"
+                         if client.slug and client.code else f"{settings.FRONTEND_URL}/espace",
+                         "activation_url": f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"},
+                        client=client,
+                    )
+            except Exception:
+                pass
+
     def destroy(self, request, *args, **kwargs):
         # SPEC §3 + niveaux : clients.delete = super_admin/admin seuls (niveau 5-6).
         if request.user.role not in ("super_admin", "admin"):

@@ -295,6 +295,14 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserCreateSerializer
         return UserSerializer
 
+    def destroy(self, request, *args, **kwargs):
+        obj = self.get_object()
+        if obj.id == request.user.id:
+            return Response({"detail": "Impossible de supprimer votre propre compte."}, status=400)
+        if obj.role == "super_admin" and User.objects.filter(role="super_admin").count() <= 1:
+            return Response({"detail": "Dernier Super Admin : suppression impossible."}, status=400)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def me(self, request):
         return Response(UserSerializer(request.user).data)

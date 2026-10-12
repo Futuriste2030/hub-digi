@@ -6,7 +6,8 @@ import { Card, CardBody } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import EtatVide from '../components/ui/EtatVide.jsx';
 import { Label, Input } from '../components/ui/Input.jsx';
-import { listerDepartements, listerPostes, listerUsers, majUser } from '../api/ressources.js';
+import { listerDepartements, listerPostes, listerUsers, majUser, supprimerUser } from '../api/ressources.js';
+import BoutonSupprimer from '../components/ui/BoutonSupprimer.jsx';
 import { demanderReset } from '../api/auth.js';
 import { messageErreur } from '../api/client.js';
 import { LIBELLES_ROLE } from '../data/session.js';
@@ -19,7 +20,7 @@ const selectCls = 'h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg
 const ROLES = Object.keys(LIBELLES_ROLE).filter((r) => r !== 'client');
 
 export default function Utilisateurs() {
-  const { notifier } = useOutletContext();
+  const { notifier, session } = useOutletContext();
   const [recherche, setRecherche] = useState('');
   const [dept, setDept] = useState('tous');
   const [role, setRole] = useState('tous');
@@ -88,10 +89,20 @@ export default function Utilisateurs() {
     try {
       await majUser(id, payload);
       setModifie(null);
-      notifier({ type: 'succes', titre: 'Compte modifié', texte: 'Rôle, département et poste mis à jour.' });
+      notifier({ type: 'succes', titre: 'Compte modifié', texte: 'E-mail pro, rôle, département et poste mis à jour.' });
       charger(recherche.trim(), dept, role, statut);
     } catch (e) {
       notifier({ type: 'info', titre: 'Modification impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const supprimer = async (u) => {
+    try {
+      await supprimerUser(u.id);
+      notifier({ type: 'succes', titre: 'Compte supprimé', texte: `${u.email} — compte effacé définitivement.` });
+      charger(recherche.trim(), dept, role, statut);
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(e) });
     }
   };
 
@@ -99,6 +110,7 @@ export default function Utilisateurs() {
 
 function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistrer }) {
   const [form, setForm] = useState({
+    email: user.email ?? '',
     first_name: user.first_name ?? '', last_name: user.last_name ?? '', role: user.role,
     department: user.department?.toString() ?? '', poste: user.poste?.toString() ?? '',
   });
@@ -122,6 +134,10 @@ function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistre
 
   const soumettre = async (e) => {
     e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setErreur("Adresse e-mail pro invalide.");
+      return;
+    }
     if (form.role !== 'client' && form.role !== 'super_admin' && !form.department) {
       setErreur('Choisissez le département.');
       return;
@@ -129,6 +145,7 @@ function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistre
     setEnvoi(true);
     try {
       await onEnregistrer(user.id, {
+        email: form.email.trim().toLowerCase(),
         first_name: form.first_name.trim(), last_name: form.last_name.trim(), role: form.role,
         department: form.role === 'super_admin' ? null : Number(form.department) || null,
         poste: form.poste ? Number(form.poste) : null,
@@ -152,6 +169,10 @@ function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistre
           </button>
         </div>
         <div className="mt-esp-5 flex flex-col gap-esp-4">
+          <div>
+            <Label htmlFor="mu-email">Adresse e-mail pro *</Label>
+            <div className="mt-esp-2"><Input id="mu-email" type="email" {...champ('email')} placeholder="prenom.nom@digicom.ml" /></div>
+          </div>
           <div className="grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="mu-prenom">Prénom</Label>
@@ -274,10 +295,19 @@ function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistre
                         type="button"
                         onClick={() => basculer(u)}
                         aria-label={u.is_active ? `Désactiver ${u.email}` : `Activer ${u.email}`}
+                        title={u.is_active ? 'Désactiver le compte' : 'Activer le compte'}
                         className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md ${u.is_active ? 'text-erreur hover:bg-erreur-fond' : 'text-succes hover:bg-succes-fond'}`}
                       >
                         {u.is_active ? <UserX size={20} aria-hidden="true" /> : <UserCheck size={20} aria-hidden="true" />}
                       </button>
+                      {session?.id !== u.id && (
+                        <BoutonSupprimer
+                          titre={`Supprimer ${u.email}`}
+                          libelle={u.email}
+                          texte="Supprimer définitivement le compte"
+                          onConfirmer={() => supprimer(u)}
+                        />
+                      )}
                     </span>
                   </td>
                 </tr>
@@ -299,12 +329,17 @@ function ModaleModifierUser({ user, departements, postes, onFermer, onEnregistre
                 <Badge ton={u.is_active ? 'succes' : 'neutre'}>{u.is_active ? 'Actif' : 'Désactivé'}</Badge>
               </div>
               <p className="font-courant text-[15px] text-gris-600">{u.department ? nomsDepts[u.department] ?? '' : '—'} · {LIBELLES_ROLE[u.role] ?? u.role}</p>
-              <div className="flex gap-esp-2 border-t border-gris-200 pt-esp-2">
+              <div className="flex flex-wrap gap-esp-2 border-t border-gris-200 pt-esp-2">
                 <Button taille="sm" variante="secondaire" onClick={() => setModifie(u)}><Pencil size={16} aria-hidden="true" /> Modifier</Button>
                 <Button taille="sm" variante="secondaire" onClick={() => reset(u)}><KeyRound size={16} aria-hidden="true" /> Reset mdp</Button>
                 <Button taille="sm" variante="fantome" onClick={() => basculer(u)}>
                   {u.is_active ? <><UserX size={16} aria-hidden="true" /> Désactiver</> : <><UserCheck size={16} aria-hidden="true" /> Activer</>}
                 </Button>
+                {session?.id !== u.id && (
+                  <Button taille="sm" variante="fantome" onClick={() => supprimer(u)}>
+                    Supprimer
+                  </Button>
+                )}
               </div>
             </CardBody>
           </Card>

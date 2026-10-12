@@ -26,16 +26,21 @@ import {
   ReceiptText,
   KeyRound,
   MonitorSmartphone,
+  Pencil,
+  X,
+  Save,
 } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import { Card, CardHeader, CardBody } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
+import BoutonSupprimer from '../components/ui/BoutonSupprimer.jsx';
+import { Label, Input } from '../components/ui/Input.jsx';
 import { CHEFS, ROLES_ADMIN, ROLES_COM, ROLES_DEV, ROLES_FINANCE, ROLES_JURIDIQUE, peutVoir, urlEspace } from '../lib/acces.js';
 import { fCFA } from '../utils/stats.js';
 import { overviewClient } from '../api/finance.js';
 import { payerFacture, telechargerPdf } from '../api/finance.js';
-import { envoyerInvitationClient } from '../api/clients.js';
-import { listerUsers } from '../api/ressources.js';
+import { envoyerInvitationClient, majClient, supprimerClient } from '../api/clients.js';
+import { listerUsers, supprimerContrat } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
 import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
 import { NonTrouve } from './Pages.jsx';
@@ -144,7 +149,7 @@ function adapterOverview(ov) {
       numero: r.numero, facture: numerosFactures[r.invoice] ?? '', montant: fCFA(Number(r.montant ?? 0)), date: dateFr(r.cree_le),
     })),
     contrats: ov.juridique.map((k) => ({
-      titre: k.titre, statut: k.statut, ton: 'info', type: k.type, fin: dateFr(k.date_fin),
+      id: k.id, titre: k.titre, statut: k.statut, ton: 'info', type: k.type, fin: dateFr(k.date_fin),
     })),
     tickets: ov.tickets.map((t) => {
       const [statut, ton] = STATUTS_TICKET[t.statut] ?? [t.statut, 'neutre'];
@@ -461,16 +466,26 @@ function OngletFinance({ client, notifier, onFait }) {
   );
 }
 
-function OngletJuridique({ client }) {
+function OngletJuridique({ client, peutSupprimer, onSupprimer }) {
   if (client.contrats.length === 0) return <Vide texte="Aucun contrat. Ajoutez le premier depuis un modèle." />;
   return (
     <div className="grid grid-cols-1 gap-esp-4 lg:grid-cols-2">
       {client.contrats.map((c) => (
-        <Card key={c.titre} survol={false}>
+        <Card key={c.id ?? c.titre} survol={false}>
           <CardHeader>
             <div className="flex items-center justify-between gap-esp-3">
               <TitreCarte Icone={ScrollText}>{c.titre}</TitreCarte>
-              <Badge ton={c.ton}>{c.statut}</Badge>
+              <span className="flex items-center gap-esp-1">
+                <Badge ton={c.ton}>{c.statut}</Badge>
+                {peutSupprimer && c.statut === 'brouillon' && (
+                  <BoutonSupprimer
+                    titre={`Supprimer ${c.titre}`}
+                    libelle={c.titre}
+                    texte="Supprimer définitivement le contrat brouillon"
+                    onConfirmer={() => onSupprimer(c)}
+                  />
+                )}
+              </span>
             </div>
             <p className="mt-esp-2 flex items-center gap-esp-2 font-courant text-[15px] text-gris-600">
               {c.type} · <CalendarClock size={16} aria-hidden="true" /> Échéance {c.fin}
@@ -543,6 +558,80 @@ function OngletDocuments({ client, notifier }) {
   );
 }
 
+/* Modale modification coordonnées client (icône bic) — si l'e-mail change,
+   le back resynchronise le compte espace + renvoie un nouveau lien 24h. */
+function ModaleEditClient({ client, onFermer, onEnregistrer }) {
+  const [form, setForm] = useState({
+    nom_societe: client.societe ?? '', contact: client.contact === '—' ? '' : (client.contact ?? ''),
+    email: client.email ?? '', phone: client.phone === '—' ? '' : (client.phone ?? ''),
+    adresse: client.adresse === '—' ? '' : (client.adresse ?? ''),
+  });
+  const [erreur, setErreur] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+  const champ = (k) => ({
+    value: form[k],
+    onChange: (e) => { setForm((f) => ({ ...f, [k]: e.target.value })); setErreur(''); },
+  });
+  const soumettre = async (e) => {
+    e.preventDefault();
+    if (form.nom_societe.trim().length < 2) { setErreur('Indiquez le nom de la société.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setErreur('Adresse e-mail pro invalide.'); return; }
+    setEnvoi(true);
+    try {
+      await onEnregistrer({
+        nom_societe: form.nom_societe.trim(), contact: form.contact.trim(),
+        email: form.email.trim().toLowerCase(), phone: form.phone.trim(), adresse: form.adresse.trim(),
+      });
+    } finally { setEnvoi(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-esp-4" role="dialog" aria-modal="true" aria-label="Modifier le client">
+      <div className="dg-fondu absolute inset-0 bg-marine-profond/60" onClick={onFermer} />
+      <form onSubmit={soumettre} className="dg-pop relative max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-xl bg-gris-0 p-esp-6 shadow-ombre-4">
+        <div className="flex items-start justify-between gap-esp-3">
+          <div>
+            <p className="dg-surtitre">Fiche client 360°</p>
+            <h2 className="!text-[26px]">Modifier les coordonnées</h2>
+          </div>
+          <button type="button" onClick={onFermer} aria-label="Fermer" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200">
+            <X size={20} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="mt-esp-5 flex flex-col gap-esp-4">
+          <div>
+            <Label htmlFor="mc-societe">Société *</Label>
+            <div className="mt-esp-2"><Input id="mc-societe" autoFocus {...champ('nom_societe')} /></div>
+          </div>
+          <div>
+            <Label htmlFor="mc-contact">Contact principal</Label>
+            <div className="mt-esp-2"><Input id="mc-contact" {...champ('contact')} placeholder="Ex. Awa Diallo" /></div>
+          </div>
+          <div>
+            <Label htmlFor="mc-email">E-mail pro *</Label>
+            <div className="mt-esp-2"><Input id="mc-email" type="email" {...champ('email')} placeholder="contact@societe.ml" /></div>
+            <p className="dg-legende mt-esp-1">Si vous changez cet e-mail, l accès espace est réinitialisé et un nouveau lien 24h est envoyé automatiquement.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-esp-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="mc-phone">Téléphone</Label>
+              <div className="mt-esp-2"><Input id="mc-phone" {...champ('phone')} placeholder="+223 …" /></div>
+            </div>
+            <div>
+              <Label htmlFor="mc-adresse">Adresse</Label>
+              <div className="mt-esp-2"><Input id="mc-adresse" {...champ('adresse')} placeholder="Quartier, ville" /></div>
+            </div>
+          </div>
+          {erreur && <p role="alert" className="font-courant text-[15px] text-erreur">{erreur}</p>}
+        </div>
+        <div className="mt-esp-6 flex justify-end gap-esp-3">
+          <Button variante="fantome" onClick={onFermer}>Annuler</Button>
+          <Button type="submit" chargement={envoi}><Save size={20} aria-hidden="true" /> Enregistrer</Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function FicheClient() {
   const { id } = useParams();
   const { notifier, session } = useOutletContext();
@@ -554,6 +643,7 @@ export default function FicheClient() {
   const [compte, setCompte] = useState(null);
   const [envoiAcces, setEnvoiAcces] = useState(false);
   const [invitationEnvoyee, setInvitationEnvoyee] = useState(false);
+  const [modaleEdit, setModaleEdit] = useState(false);
 
   const charger = async () => {
     setErreurChargement('');
@@ -623,6 +713,43 @@ export default function FicheClient() {
     }
   };
 
+  const enregistrerCoordonnees = async (payload) => {
+    const emailChange = (payload.email || '').toLowerCase() !== (client.email || '').toLowerCase();
+    try {
+      await majClient(client.id, payload);
+      setModaleEdit(false);
+      if (emailChange) {
+        notifier({ type: 'succes', titre: 'Coordonnées mises à jour', texte: `Nouvel e-mail ${payload.email} — accès réinitialisé, nouveau lien 24h envoyé automatiquement.` });
+      } else {
+        notifier({ type: 'succes', titre: 'Coordonnées mises à jour', texte: 'Fiche client modifiée.' });
+      }
+      await charger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Modification impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const supprimer = async () => {
+    try {
+      await supprimerClient(client.id);
+      notifier({ type: 'succes', titre: 'Client supprimé', texte: `${client.societe} — fiche effacée.` });
+      naviguer('/clients');
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const supprimerUnContrat = async (c) => {
+    try {
+      await supprimerContrat(c.id);
+      notifier({ type: 'succes', titre: 'Contrat supprimé', texte: `${c.titre} — brouillon effacé.` });
+      await charger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(e) });
+    }
+  };
+  const peutSupprimerContrat = peutVoir(session, ['super_admin', 'chef_juridique']);
+
   if (!client) {
     return (
       <div>
@@ -673,9 +800,26 @@ export default function FicheClient() {
           </div>
         </div>
         {peutEcrire && (
-          <Button variante="secondaire" onClick={() => naviguer(`/mails?client=${client.id}`)}>
-            <Send size={20} aria-hidden="true" /> Écrire au client
-          </Button>
+          <span className="flex flex-wrap items-center gap-esp-2">
+            <button
+              type="button"
+              onClick={() => setModaleEdit(true)}
+              aria-label={`Modifier les coordonnées de ${client.societe}`}
+              title="Modifier les coordonnées"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-gris-300 text-digi-texte hover:bg-digi-voile"
+            >
+              <Pencil size={20} aria-hidden="true" />
+            </button>
+            <BoutonSupprimer
+              titre={`Supprimer ${client.societe}`}
+              libelle={client.societe}
+              texte="Supprimer définitivement le client"
+              onConfirmer={supprimer}
+            />
+            <Button variante="secondaire" onClick={() => naviguer(`/mails?client=${client.id}`)}>
+              <Send size={20} aria-hidden="true" /> Écrire au client
+            </Button>
+          </span>
         )}
         {peutEcrire && !client.est_interne && (
           <Link to={urlEspace(client)} title="Prévisualiser le portail tel que ce client le voit (Administration)" className="inline-flex min-h-[44px] items-center gap-esp-1 rounded-md border border-digi px-esp-5 font-titrage text-[15px] font-bold uppercase leading-none tracking-[0.06em] text-digi transition-all duration-standard hover:bg-digi-voile">
@@ -683,6 +827,7 @@ export default function FicheClient() {
           </Link>
         )}
       </div>
+      {modaleEdit && <ModaleEditClient client={client} onFermer={() => setModaleEdit(false)} onEnregistrer={enregistrerCoordonnees} />}
 
       <div role="tablist" aria-label="Sections de la fiche client" className="dg-scroll-x mt-esp-6 flex gap-esp-1 overflow-x-auto border-b border-gris-300 pb-esp-1">
         {ongletsVisibles.map(({ id: oid, libelle, Icone }) => (
@@ -709,7 +854,7 @@ export default function FicheClient() {
         {ongletActif === 'projets' && <OngletProjets client={client} peutOuvrir={voitProjets} />}
         {ongletActif === 'com' && <OngletCom client={client} />}
         {ongletActif === 'finance' && <OngletFinance key={client.id} client={client} notifier={notifier} onFait={charger} />}
-        {ongletActif === 'juridique' && <OngletJuridique client={client} />}
+        {ongletActif === 'juridique' && <OngletJuridique client={client} peutSupprimer={peutSupprimerContrat} onSupprimer={supprimerUnContrat} />}
         {ongletActif === 'support' && <OngletSupport client={client} />}
         {ongletActif === 'documents' && <OngletDocuments client={client} notifier={notifier} />}
       </div>

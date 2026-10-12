@@ -433,19 +433,29 @@ export default function EspaceClient() {
         setChargement(false);
         return;
       }
+      let dv = null;
       if (cible.id) {
-        const dv = await api.get('/portal/dashboard/', { params: { client: cible.id } }).then((r) => r.data);
+        dv = await api.get('/portal/dashboard/', { params: { client: cible.id } }).then((r) => r.data);
         if (!ok()) return;
         setDonnees(dv);
       } else {
-        const dv = await dashboardPortal();
+        dv = await dashboardPortal();
         if (!ok()) return;
         setDonnees(dv);
       }
-      const [rs, ms] = await Promise.all([listerRecus(), listerMailsEnvoyes()]);
+      /* Isolation stricte par client : l'aperçu super_admin (?client=) ne doit
+         voir QUE les mails de ce client. Le back filtre déjà les comptes
+         client, mais le super_admin voit tout par défaut -> on force le
+         filtre client côté front. Idem pour les reçus (filtrés via factures). */
+      const clientId = dv?.client?.id;
+      const [rs, ms] = await Promise.all([
+        listerRecus(),
+        clientId ? listerMailsEnvoyes({ client: clientId }) : listerMailsEnvoyes(),
+      ]);
       if (!ok()) return;
-      setRecus(rs);
-      setMails(ms.slice(0, 20));
+      const idsFactures = new Set((dv?.factures ?? []).map((f) => f.id));
+      setRecus((rs ?? []).filter((r) => idsFactures.size === 0 ? true : idsFactures.has(r.invoice)));
+      setMails((ms ?? []).slice(0, 20));
     } catch (e) {
       if (ok()) {
         setDonnees(null);

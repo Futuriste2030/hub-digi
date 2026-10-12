@@ -66,6 +66,7 @@ export const listerTemplatesMail = () => toutLister('/mailing/templates/', {});
 export const listerUsers = (params) => toutLister('/users/', params);
 export const creerUser = (payload) => post('/users/', payload);
 export const majUser = (id, payload) => patch(`/users/${id}/`, payload);
+export const supprimerUser = (id) => suppr(`/users/${id}/`);
 export const resetUserPassword = (id, newPassword) => post(`/users/${id}/reset_password/`, { new_password: newPassword });
 export const listerDepartements = () => get('/departments/').then((d) => d.results ?? d);
 export const listerPostes = () => toutLister('/postes/', {});
