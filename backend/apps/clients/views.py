@@ -66,10 +66,32 @@ class ClientViewSet(viewsets.ModelViewSet):
         )
         if dependances > 0:
             return Response(
-                {"detail": "Client lié à des projets, tickets ou documents : suppression impossible, désactivez ou archivez."},
+                {"detail": "Client lié à des projets, tickets ou documents : suppression impossible (historique conservé). Archivez-le depuis la liste ou la fiche."},
                 status=400,
             )
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"])
+    def archiver(self, request, pk=None):
+        """Archive le client : masqué des listes, historique conservé. Super Admin / Administration."""
+        if request.user.role not in ("super_admin", "admin"):
+            return Response({"detail": "Archivage réservé au Super Admin / Administration."}, status=403)
+        client = self.get_object()
+        client.statut = Client.STATUT_ARCHIVE
+        client.save(update_fields=["statut"])
+        return Response({"detail": f"{client.nom_societe} archivé.", "statut": client.statut})
+
+    @action(detail=True, methods=["post"])
+    def desarchiver(self, request, pk=None):
+        """Réactive un client archivé (redevient Client). Super Admin / Administration."""
+        if request.user.role not in ("super_admin", "admin"):
+            return Response({"detail": "Désarchivage réservé au Super Admin / Administration."}, status=403)
+        client = self.get_object()
+        if client.statut != Client.STATUT_ARCHIVE:
+            return Response({"detail": "Client non archivé."}, status=400)
+        client.statut = Client.STATUT_CLIENT
+        client.save(update_fields=["statut"])
+        return Response({"detail": f"{client.nom_societe} réactivé.", "statut": client.statut})
 
     @action(detail=True, methods=["post"])
     def send_access(self, request, pk=None):

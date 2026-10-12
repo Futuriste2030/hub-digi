@@ -39,7 +39,7 @@ import { CHEFS, ROLES_ADMIN, ROLES_COM, ROLES_DEV, ROLES_FINANCE, ROLES_JURIDIQU
 import { fCFA } from '../utils/stats.js';
 import { overviewClient } from '../api/finance.js';
 import { payerFacture, telechargerPdf } from '../api/finance.js';
-import { envoyerInvitationClient, majClient, supprimerClient } from '../api/clients.js';
+import { envoyerInvitationClient, majClient, supprimerClient, archiverClient, desarchiverClient } from '../api/clients.js';
 import { listerUsers, supprimerContrat } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
 import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
@@ -68,7 +68,7 @@ const ONGLETS = [
   { id: 'documents', libelle: 'Documents', Icone: FolderOpen },
 ];
 
-const STATUT_CLIENT_LABEL = { prospect: 'Prospect', client: 'Client' };
+const STATUT_CLIENT_LABEL = { prospect: 'Prospect', client: 'Client', archive: 'Archivé' };
 const TYPES_PROJET = { site_web: 'Site web', app_web: 'App web', app_mobile: 'App mobile', autre: 'Autre' };
 const STATUTS_PROJET = { a_faire: ['À faire', 'neutre'], en_cours: ['En cours', 'info'], en_review: ['En review', 'alerte'], termine: ['Terminé', 'succes'], en_pause: ['En pause', 'neutre'] };
 const STATUTS_CAMPAGNE = { brouillon: ['Brouillon', 'neutre'], en_cours: ['En cours', 'info'], terminee: ['Terminée', 'succes'] };
@@ -125,7 +125,8 @@ function adapterOverview(ov) {
     phone: c.phone || '—',
     adresse: c.adresse || '—',
     statut: STATUT_CLIENT_LABEL[c.statut] ?? c.statut,
-    tonStatut: c.statut === 'client' ? 'succes' : 'alerte',
+    statutId: c.statut,
+    tonStatut: c.statut === 'client' ? 'succes' : c.statut === 'archive' ? 'neutre' : 'alerte',
     solde: fCFA(ov.finance.solde_impayes ?? 0),
     kpi: {
       projetsActifs: ov.projets.length,
@@ -749,6 +750,26 @@ export default function FicheClient() {
       notifier({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(e) });
     }
   };
+
+  const archiver = async () => {
+    try {
+      await archiverClient(client.id);
+      notifier({ type: 'succes', titre: 'Client archivé', texte: `${client.societe} — masqué des listes, historique conservé.` });
+      await charger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Archivage impossible', texte: messageErreur(e) });
+    }
+  };
+
+  const desarchiver = async () => {
+    try {
+      await desarchiverClient(client.id);
+      notifier({ type: 'succes', titre: 'Client réactivé', texte: `${client.societe} — de nouveau visible.` });
+      await charger();
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Réactivation impossible', texte: messageErreur(e) });
+    }
+  };
   const peutSupprimerContrat = peutVoir(session, ['super_admin', 'chef_juridique']);
 
   if (!client) {
@@ -811,6 +832,13 @@ export default function FicheClient() {
             >
               <Pencil size={20} aria-hidden="true" />
             </button>
+            <Button
+              variante="fantome"
+              taille="sm"
+              onClick={client.statutId === 'archive' ? desarchiver : archiver}
+            >
+              {client.statutId === 'archive' ? 'Réactiver' : 'Archiver'}
+            </Button>
             <BoutonSupprimer
               titre={`Supprimer ${client.societe}`}
               libelle={client.societe}
@@ -828,6 +856,11 @@ export default function FicheClient() {
           </Link>
         )}
       </div>
+      {client.statutId === 'archive' && (
+        <p className="mt-esp-4 rounded-lg bg-gris-100 p-esp-4 text-center font-courant text-[15px] text-gris-600" role="status">
+          Client archivé — masqué de la liste, historique conservé. Cliquez sur « Réactiver » pour le restaurer.
+        </p>
+      )}
       {modaleEdit && <ModaleEditClient client={client} onFermer={() => setModaleEdit(false)} onEnregistrer={enregistrerCoordonnees} />}
 
       <div role="tablist" aria-label="Sections de la fiche client" className="dg-scroll-x mt-esp-6 flex gap-esp-1 overflow-x-auto border-b border-gris-300 pb-esp-1">

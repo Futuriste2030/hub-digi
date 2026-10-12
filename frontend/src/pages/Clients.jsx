@@ -1,24 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-import { Plus, Search, ArrowRight } from 'lucide-react';
+import { Plus, Search, ArrowRight, Archive, ArchiveRestore } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { INTERNES, ROLES_ADMIN, ROLES_CREATION_CLIENT, peutVoir } from '../lib/acces.js';
 import { Card, CardBody } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import BoutonSupprimer from '../components/ui/BoutonSupprimer.jsx';
-import { listerClients, supprimerClient } from '../api/clients.js';
+import { listerClients, supprimerClient, archiverClient, desarchiverClient } from '../api/clients.js';
 import { messageErreur } from '../api/client.js';
 
 /* Liste des clients — API réelle, ouvre la Fiche 360° au clic. */
 
-const STATUT_LABEL = { prospect: 'Prospect', client: 'Client' };
-const STATUT_TON = { prospect: 'alerte', client: 'succes' };
+const STATUT_LABEL = { prospect: 'Prospect', client: 'Client', archive: 'Archivé' };
+const STATUT_TON = { prospect: 'alerte', client: 'succes', archive: 'neutre' };
 
 export default function Clients() {
   const { notifier, session } = useOutletContext();
   const [recherche, setRecherche] = useState('');
   const [clients, setClients] = useState([]);
+  const [voirArchives, setVoirArchives] = useState(false);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState('');
   const naviguer = useNavigate();
@@ -55,7 +56,26 @@ export default function Clients() {
       notifier({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(e) });
     }
   };
+  const archiver = async (c) => {
+    try {
+      await archiverClient(c.id);
+      notifier({ type: 'succes', titre: 'Client archivé', texte: `${c.nom_societe} — masqué des listes, historique conservé.` });
+      charger(recherche);
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Archivage impossible', texte: messageErreur(e) });
+    }
+  };
+  const desarchiver = async (c) => {
+    try {
+      await desarchiverClient(c.id);
+      notifier({ type: 'succes', titre: 'Client réactivé', texte: `${c.nom_societe} — de nouveau visible.` });
+      charger(recherche);
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Réactivation impossible', texte: messageErreur(e) });
+    }
+  };
   const peutSupprimer = peutVoir(session, ROLES_ADMIN);
+  const visibles = voirArchives ? clients : clients.filter((c) => c.statut !== 'archive');
 
   if (!peutVoir(session, INTERNES)) {
     return (
@@ -110,7 +130,7 @@ export default function Clients() {
               </tr>
             </thead>
             <tbody>
-              {clients.map((c) => (
+              {visibles.map((c) => (
                 <tr key={c.id} className="cursor-pointer border-b border-gris-200 transition-colors duration-rapide last:border-0 hover:bg-gris-100" onClick={() => naviguer(`/clients/${c.id}`)}>
                   <td className="px-esp-3 py-esp-3">
                     <span className="block font-courant text-[17px] font-semibold text-gris-900">{c.nom_societe}</span>
@@ -122,6 +142,28 @@ export default function Clients() {
                   <td className="px-esp-3 py-esp-3"><Badge ton={STATUT_TON[c.statut] ?? 'neutre'}>{STATUT_LABEL[c.statut] ?? c.statut}</Badge>{c.est_interne && <span className="ml-esp-2"><Badge ton="info">Interne</Badge></span>}</td>
                   <td className="px-esp-3 py-esp-3 text-right">
                     <span className="inline-flex items-center gap-esp-1" onClick={(e) => e.stopPropagation()}>
+                      {peutSupprimer && c.statut !== 'archive' && (
+                        <button
+                          type="button"
+                          onClick={() => archiver(c)}
+                          aria-label={`Archiver ${c.nom_societe}`}
+                          title="Archiver (masquer, historique conservé)"
+                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200"
+                        >
+                          <Archive size={20} aria-hidden="true" />
+                        </button>
+                      )}
+                      {peutSupprimer && c.statut === 'archive' && (
+                        <button
+                          type="button"
+                          onClick={() => desarchiver(c)}
+                          aria-label={`Réactiver ${c.nom_societe}`}
+                          title="Réactiver le client"
+                          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-succes hover:bg-succes-fond"
+                        >
+                          <ArchiveRestore size={20} aria-hidden="true" />
+                        </button>
+                      )}
                       {peutSupprimer && (
                         <BoutonSupprimer
                           titre={`Supprimer ${c.nom_societe}`}
@@ -140,10 +182,19 @@ export default function Clients() {
             </tbody>
           </table>
           )}
-          {!chargement && !erreur && clients.length === 0 && (
+          {!chargement && !erreur && visibles.length === 0 && (
             <p className="px-esp-5 py-esp-6 text-center font-courant text-[15px] text-gris-600">
               Aucun client trouvé. Vérifiez l orthographe, puis relancez la recherche.
             </p>
+          )}
+          {!chargement && !erreur && clients.some((c) => c.statut === 'archive') && (
+            <button
+              type="button"
+              onClick={() => setVoirArchives((v) => !v)}
+              className="mx-auto mt-esp-2 flex min-h-[44px] items-center gap-esp-2 px-esp-4 font-courant text-[15px] font-semibold text-digi-texte"
+            >
+              {voirArchives ? 'Masquer les archivés' : `Afficher les archivés (${clients.filter((c) => c.statut === 'archive').length})`}
+            </button>
           )}
         </CardBody>
       </Card>

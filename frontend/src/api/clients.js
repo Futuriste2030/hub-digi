@@ -15,6 +15,8 @@ export async function creerClient(payload) {
 
 export const majClient = (id, payload) => patch(`/clients/${id}/`, payload);
 export const supprimerClient = (id) => suppr(`/clients/${id}/`);
+export const archiverClient = (id) => api.post(`/clients/${id}/archiver/`, {}).then((r) => r.data);
+export const desarchiverClient = (id) => api.post(`/clients/${id}/desarchiver/`, {}).then((r) => r.data);
 
 /* Compte espace client créé SANS mot de passe (set_unusable_password côté back).
    Le client définit lui-même son mdp via le lien d'invitation 24h. */

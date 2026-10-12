@@ -7,7 +7,8 @@ from django.utils.text import slugify
 class Client(models.Model):
     STATUT_PROSPECT = "prospect"
     STATUT_CLIENT = "client"
-    STATUTS = [(STATUT_PROSPECT, "Prospect"), (STATUT_CLIENT, "Client")]
+    STATUT_ARCHIVE = "archive"
+    STATUTS = [(STATUT_PROSPECT, "Prospect"), (STATUT_CLIENT, "Client"), (STATUT_ARCHIVE, "Archivé")]
 
     nom_societe = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, blank=True,
