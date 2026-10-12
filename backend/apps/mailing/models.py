@@ -105,10 +105,27 @@ class SentMail(models.Model):
         }
         if adresse:
             entetes["List-Unsubscribe"] = f"<mailto:{adresse}?subject=desinscription>"
+        # SMTP de l'identité du département si renseigné (admin : EmailIdentity) :
+        # envoi authentifié avec le compte du domaine -> alignement SPF/DKIM.
+        # Sinon repli sur la connexion Django par défaut (EMAIL_* du .env).
+        connexion = None
+        identite = self.identity
+        if identite is not None and (identite.smtp_host or "").strip() and (identite.smtp_user or "").strip():
+            from django.core.mail.backends.smtp import EmailBackend
+
+            port = identite.smtp_port or 587
+            ssl = port == 465
+            connexion = EmailBackend(
+                host=identite.smtp_host.strip(), port=port,
+                username=identite.smtp_user.strip(), password=identite.smtp_password or "",
+                use_tls=bool(identite.use_tls) and not ssl, use_ssl=ssl,
+                timeout=15,
+            )
         try:
             message = EmailMultiAlternatives(
                 self.subject, texte_brut, expediteur, [self.to], cc=self.liste_cc,
-                reply_to=[adresse] if adresse else None, headers=entetes)
+                reply_to=[adresse] if adresse else None, headers=entetes,
+                connection=connexion)
             message.attach_alternative(self.body_html, "text/html")
             message.send(fail_silently=False)
             self.statut = self.STATUT_ENVOYE
