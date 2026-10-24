@@ -324,20 +324,15 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
         invoice.save()
         from apps.mailing.services import send_templated_mail
 
-        piece_jointe = None
-        try:
-            from apps.finance.pdf import pdf_recu
-            buf = pdf_recu(recu)
-            piece_jointe = (f"{recu.numero}.pdf", buf.getvalue(), "application/pdf")
-        except Exception:
-            piece_jointe = None
+        from apps.ligdicash.liens import lien_verification_recu
+        lien_recu = lien_verification_recu(recu.numero)
         send_templated_mail(
             "recu_disponible", invoice.destinataire_email,
             {"societe": invoice.destinataire_nom, "numero": recu.numero,
              "montant": f"{float(recu.montant):,.0f}".replace(",", " "),
-             "facture_numero": invoice.numero},
+             "facture_numero": invoice.numero,
+             "lien_recu": lien_recu},
             department_slug="finance", client=invoice.client,
-            attachment=piece_jointe,
         )
         return Response(ReceiptSerializer(recu).data, status=201)
 
@@ -422,20 +417,15 @@ class PayWebhookView(APIView):
         invoice.save()
         from apps.mailing.services import send_templated_mail
 
-        piece_jointe = None
-        try:
-            from apps.finance.pdf import pdf_recu
-            buf = pdf_recu(recu)
-            piece_jointe = (f"{recu.numero}.pdf", buf.getvalue(), "application/pdf")
-        except Exception:
-            piece_jointe = None
+        from apps.ligdicash.liens import lien_verification_recu
+        lien_recu = lien_verification_recu(recu.numero)
         send_templated_mail(
             "recu_disponible", invoice.destinataire_email,
             {"societe": invoice.destinataire_nom, "numero": recu.numero,
              "montant": f"{float(recu.montant):,.0f}".replace(",", " "),
-             "facture_numero": invoice.numero},
+             "facture_numero": invoice.numero,
+             "lien_recu": lien_recu},
             department_slug="finance", client=invoice.client,
-            attachment=piece_jointe,
         )
         return Response({"id": recu.id, "numero": recu.numero,
                          "statut_facture": invoice.statut}, status=201)
