@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { Search, ArrowRight, Printer } from 'lucide-react';
+import { Search, ArrowRight, Printer, Mail } from 'lucide-react';
 import { Card, CardBody } from '../components/ui/Card.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_FINANCE, peutVoir } from '../lib/acces.js';
-import { listerRecus, telechargerPdf } from '../api/finance.js';
+import { listerRecus, telechargerPdf, envoyerRecu } from '../api/finance.js';
 import { listerFactures } from '../api/finance.js';
 import { messageErreur } from '../api/client.js';
 import { fCFA } from '../utils/stats.js';
@@ -24,6 +24,7 @@ export default function Recus() {
   const [factures, setFactures] = useState({});
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState('');
+  const [envoi, setEnvoi] = useState('');
 
   const charger = async (q = '') => {
     try {
@@ -53,6 +54,19 @@ export default function Recus() {
       await telechargerPdf(`/finance/receipts/${r.id}/pdf/`, `${r.numero}.pdf`);
     } catch {
       /* échec silencieux : le détail affiche l'erreur */
+    }
+  };
+
+  const envoyer = async (r) => {
+    setEnvoi(r.numero);
+    try {
+      await envoyerRecu(r.id);
+      setErreur('');
+      alert(`Mail envoyé pour ${r.numero}.`);
+    } catch (e) {
+      setErreur(messageErreur(e, `Envoi impossible pour ${r.numero}.`));
+    } finally {
+      setEnvoi('');
     }
   };
 
@@ -112,6 +126,9 @@ export default function Recus() {
                       </Link>
                       <button type="button" onClick={() => pdf(r)} aria-label={`PDF ${r.numero}`} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-gris-600 hover:bg-gris-200">
                         <Printer size={20} aria-hidden="true" />
+                      </button>
+                      <button type="button" onClick={() => envoyer(r)} disabled={envoi === r.numero} aria-label={`Envoyer le reçu ${r.numero} par mail`} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-digi-texte hover:bg-digi-voile disabled:opacity-50">
+                        <Mail size={20} aria-hidden="true" />
                       </button>
                     </span>
                   </td>

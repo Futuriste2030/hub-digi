@@ -27,6 +27,7 @@ export const envoyerFacture = (id) => post(`/finance/invoices/${id}/envoyer/`, {
 export const pdfFacture = (id) => `/finance/invoices/${id}/pdf/`;
 export const listerRecus = (params) => toutLister('/finance/receipts/', params);
 export const pdfRecu = (id) => `/finance/receipts/${id}/pdf/`;
+export const envoyerRecu = (id) => post(`/finance/receipts/${id}/envoyer/`, {});
 export const listerDepenses = (params) => toutLister('/finance/expenses/', params);
 export const creerDepense = (payload) => post('/finance/expenses/', payload);
 export const supprimerDepense = (id) => suppr(`/finance/expenses/${id}/`);

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Printer, Mail } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import RecuDoc from '../components/finance/RecuDoc.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_FINANCE, peutVoir } from '../lib/acces.js';
-import { detailFacture, listerRecus, telechargerPdf } from '../api/finance.js';
+import { detailFacture, listerRecus, telechargerPdf, envoyerRecu } from '../api/finance.js';
 import { messageErreur } from '../api/client.js';
 import { getEntreprise } from '../data/parametres.js';
 import { NonTrouve } from './Pages.jsx';
@@ -86,6 +86,15 @@ export default function RecuDetail() {
     }
   };
 
+  const envoyerMail = async () => {
+    try {
+      await envoyerRecu(recu.id);
+      notifier({ type: 'succes', titre: 'Mail envoyé', texte: `Reçu ${recu.numero} envoyé au client.` });
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Envoi impossible', texte: messageErreur(e) });
+    }
+  };
+
   if (!recu) {
     return <p className="rounded-lg bg-gris-0 p-esp-6 text-center font-courant text-[15px] text-gris-600" role="status">Chargement…</p>;
   }
@@ -106,6 +115,9 @@ export default function RecuDetail() {
           </Button>
           <Button variante="secondaire" onClick={pdfServeur}>
             <Printer size={20} aria-hidden="true" /> PDF serveur
+          </Button>
+          <Button variante="secondaire" onClick={envoyerMail}>
+            <Mail size={20} aria-hidden="true" /> Envoyer par mail
           </Button>
         </div>
       </div>

@@ -449,6 +449,28 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         recu = self.get_object()
         return FileResponse(pdf_recu(recu), as_attachment=True, filename=f"{recu.numero}.pdf")
 
+    @action(detail=True, methods=["post"])
+    def envoyer(self, request, pk=None):
+        """Renvoie le mail recu_disponible (avec lien de vérification) au client."""
+        recu = self.get_object()
+        invoice = recu.invoice
+        if not invoice.destinataire_email:
+            return Response({"detail": "Aucun e-mail destinataire sur cette facture."}, status=400)
+        from apps.ligdicash.liens import lien_verification_recu
+        from apps.mailing.services import send_templated_mail
+        lien_recu = lien_verification_recu(recu.numero)
+        mail = send_templated_mail(
+            "recu_disponible", invoice.destinataire_email,
+            {"societe": invoice.destinataire_nom, "numero": recu.numero,
+             "montant": f"{float(recu.montant):,.0f}".replace(",", " "),
+             "facture_numero": invoice.numero,
+             "lien_recu": lien_recu},
+            department_slug="finance", client=invoice.client,
+        )
+        if mail is None:
+            return Response({"detail": "Mail non envoyé (template inactif ou destinataire vide)."}, status=400)
+        return Response({"detail": "Mail envoyé.", "mail_id": mail.id})
+
 
 class ExpenseViewSet(viewsets.ModelViewSet):
     queryset = Expense.objects.all()
