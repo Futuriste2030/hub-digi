@@ -18,7 +18,7 @@ const dateFr = (iso) => {
 };
 
 export default function Recus() {
-  const { session } = useOutletContext();
+  const { session, notifier } = useOutletContext();
   const [recherche, setRecherche] = useState('');
   const [recus, setRecus] = useState([]);
   const [factures, setFactures] = useState({});
@@ -62,9 +62,11 @@ export default function Recus() {
     try {
       await envoyerRecu(r.id);
       setErreur('');
-      alert(`Mail envoyé pour ${r.numero}.`);
+      notifier?.({ type: 'succes', titre: 'Mail envoyé', texte: `Reçu ${r.numero} envoyé au client.` });
     } catch (e) {
-      setErreur(messageErreur(e, `Envoi impossible pour ${r.numero}.`));
+      const msg = messageErreur(e, `Envoi impossible pour ${r.numero}.`);
+      setErreur(msg);
+      notifier?.({ type: 'info', titre: 'Envoi impossible', texte: msg });
     } finally {
       setEnvoi('');
     }
