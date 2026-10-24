@@ -83,6 +83,177 @@ GET /api/v1/chat/conversations/ (dernier message + non-lus par interlocuteur)
 GET /api/v1/chat/messages/?avec= ; POST /api/v1/chat/send/ ; POST /api/v1/chat/lus/
 ```
 
+## Paiement en ligne — LigdiCash (payin avec redirection)
+
+App `apps/ligdicash`. Les clés (`LIGDICASH_API_KEY`, `LIGDICASH_API_TOKEN`) ne
+sortent JAMAIS du backend. Actif quand `PAYMENT_ENABLED=1` **et**
+`LIGDICASH_ENABLED=1` (backend/.env).
+
+```
+POST /api/v1/finance/paiements/ligdicash/initier/        {facture_id} -> {transaction_id, pay_url}
+POST /api/v1/finance/paiements/ligdicash/initier-lien/    {facture, sig} (public, lien signé)
+GET  /api/v1/finance/paiements/ligdicash/facture/<numero>/?sig=...   (public : page de paiement)
+GET  /api/v1/finance/paiements/ligdicash/recu/<numero>/?sig=...      (public : vérification reçu)
+GET  /api/v1/finance/paiements/ligdicash/retour/<txn>/?sig=...       (public : page de retour)
+GET  /api/v1/finance/paiements/ligdicash/<txn>/statut/               (authentifié)
+POST /api/v1/finance/paiements/ligdicash/callback/                   (public : callback LigdiCash)
+```
+
+- **Lien unique et signé par facture** : `/paiement/facture/<numero>?sig=…`
+  (HMAC sur le SECRET_KEY). Il est figé dans le QR de la facture PDF, dans le
+  mail `facture_disponible` / `relance_facture`, dans le message WhatsApp et
+  dans le bouton « copier le lien de paiement ». Le reçu reçoit son propre
+  lien de vérification `/paiement/recu/<numero>` (QR du reçu).
+- Le lien est **stable** ; le montant est **TOUJOURS recalculé par le serveur**
+  (le client ne peut pas altérer le QR).
+- Le callback LigdiCash est **re-vérifié** via `/confirm` avec le token de
+  création stocké : le payload reçu n'est jamais cru. Le double POST de
+  LigdiCash est dédupliqué sur le statut en base.
+- Un montant encaissé différent du montant figé n'est **pas** encaissé
+  automatiquement : l'anomalie est tracée (`PayinTransaction.erreur`).
+
+Test réel (crée une facture, ne paie jamais) :
+
+```bash
+python manage.py ligdicash_test                    # facture fictive 100 XOF
+python manage.py ligdicash_test --facture FACTURE-SLUG-JJ-MM-AAAA-ID
+```
+
+En dev, `LIGDICASH_CALLBACK_URL` doit être joignable depuis Internet (tunnel)
+sinon aucun callback ne remonte : le statut se lit alors via `/statut/`.
+
+> ⚠️ La signature des liens dérive du `DJANGO_SECRET_KEY` : le faire tourner
+> invalide les QR déjà imprimés (les liens signés deviennent refusés).
+
+**Durée de vie de la page de paiement** : la page LigdiCash servie par
+`pay_url` cesse de répondre **~16 min après la création de la facture**
+(mesuré) — elle renvoie alors une 404. Deux garde-fous côté HUB DIGI :
+
+- `FENETRE_REPRISE` (15 min) : une tentative en cours plus ancienne n'est pas
+  réutilisée — une nouvelle facture LigdiCash est créée ;
+- `page_paiement_valide()` : le `pay_url` est réellement ouvert avant d'être
+  renvoyé au client. S'il sert une 404, la transaction est marquée
+  `notcompleted` et une nouvelle facture est créée (2 essais), sinon le client
+  est envoyé vers une page morte.
+
+Diagnostic :
+
+```bash
+python manage.py verif_paiement           # contrôle les pay_url stockés
+python manage.py verif_paiement --creer   # + crée une facture test (aucun paiement)
+```
+
+### Validation d'intégration LigdiCash (équipe LigdiCash)
+
+**Traçabilité des callbacks** — chaque POST reçu sur le callback est journalisé
+(corps brut, en-têtes, IP, réponse) dans `CallbackLigdiCash`, y compris les
+sondes envoyées avant toute transaction réelle. La réponse est **toujours en
+200** : un 4xx ferait retryer LigdiCash et ferait échouer la validation.
+
+```bash
+python manage.py callbacks_ligdicash                # les 20 derniers, lisibles
+python manage.py callbacks_ligdicash --dernier 5
+python manage.py callbacks_ligdicash --transaction PAI-20261020-XXXXXX
+python manage.py callbacks_ligdicash --format json  # sortie brute à coller
+```
+
+**Lien de paiement de test** :
+
+```bash
+python manage.py lien_test_ligdicash --montant 10
+python manage.py lien_test_ligdicash --montant 100
+```
+
+Le lien affiché est celui du QR de la facture (public, signé, **stable**) :
+chaque ouverture crée une facture LigdiCash neuve, donc le lien reste
+valable même des le lendemain.
+
+> ⚠️ **Minimum opérateur** : notre application n'impose aucun minimum (elle
+> refuse seulement un montant ≤ 0), mais **Orange Mali refuse en dessous de
+> 100 F CFA** (table des opérateurs LigdiCash). Un paiement de 10 F CFA sera
+> donc refusé par l'opérateur, pas par l'application.
+
+### Régénérer les PDF (QR « PAYEZ ICI » + lien)
+
+Les PDF sont produits à la volée par l'API : ce sont les envois (mails) et les
+documents déjà imprimés qui restent sur l'ancienne version.
+
+```bash
+python manage.py regenerer_pdfs             # tous les PDF -> media/factures + media/recus
+python manage.py regenerer_pdfs --envoyer   # + renvoi du mail facture_disponible
+python manage.py regenerer_pdfs --numero FACTURE-... --statut envoyee
+```
+
+### Tester le paiement derrière ngrok (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\dev-ngrok.ps1   # depuis la racine
+powershell -ExecutionPolicy Bypass -File .\scripts\dev-ngrok.ps1 -Stop
+```
+
+Le script fait tout : lit l'authtoken ngrok (config globale), démarre le tunnel,
+réécrit `backend/.env` + `frontend/.env` avec l'URL publique, relance Django et
+Vite. Les valeurs PROD de `backend/.env` sont sauvegardées dans
+`backend/.env.prod.bak`.
+
+**Un seul tunnel, une seule origine.** ngrok Free n'accorde qu'UN domaine par
+compte : impossible d'exposer l'API et le SPA sur deux tunnels (ils se marchent
+dessus). Le tunnel pointe donc sur Vite (5199) et Vite relaie Django via
+`server.proxy` (`frontend/vite.config.js`). Conséquences :
+
+- SPA et API partagent la même origine → pas de CORS, pas de CSRF en dev.
+- `VITE_API_URL=/api/v1` (chemin relatif) au lieu d'une URL absolue.
+- `FRONTEND_URL`, `LIGDICASH_STORE_URL` et `LIGDICASH_CALLBACK_URL` pointent
+  tous vers l'URL publique du tunnel.
+
+Points d'attention :
+
+- `DJANGO_DEBUG=1` en dev : sinon `SESSION_COOKIE_SECURE` / `CSRF_COOKIE_SECURE`
+  bloquent les cookies sur `http://localhost`.
+- `EMAIL_BACKEND=console` en dev (le SMTP du VPS n'a pas de vrai mot de passe).
+- Le premier accès navigateur au tunnel affiche la page d'avertissement ngrok
+  (« Visit Site ») ; les appels XHR portent l'en-tête `ngrok-skip-browser-warning`
+  pour la contourner (`frontend/src/api/client.js`).
+- Vérifier la réception du callback sur http://127.0.0.1:4040 (requêtes).
+- Smoke test sans navigateur, sans payer :
+  `python manage.py ligdicash_test` (facture fictive de 100 XOF).
+
+## Attestations de formation
+
+Document officiel (PDF **A4 paysage**) délivré à un stagiaire : cadre double,
+cachet + signature superposés, et **QR de traçabilité** qui encode le lien
+public de vérification. Le lien est signé (HMAC, contexte « attestation » —
+distinct du paiement) : `/attestation/<numero>?sig=…`.
+
+- `AttestationFormation` : une par inscription (`OneToOne`), numéro figé
+  `ATT-2026-0012`, mention libre, date de délivrance.
+- `InscriptionFormation.STATUT_TERMINEE` : nouveau statut — **seules les
+  inscriptions terminées sont éligibles** (défaut ; `confirmee` acceptée en
+  option via `?statuts=`).
+- `Formation` : `date_debut`, `date_fin`, `lieu` (imprimés sur le document).
+- `SiteSettings` : `cachet_formation`, `signature_formation`,
+  `signataire_formation` (à saisir dans l'admin Django).
+
+```bash
+POST /api/v1/formations/inscriptions/{id}/attestation/     -> délivre (ou retourne)
+POST /api/v1/formations/catalogue/{id}/attestations/       -> génération par formation
+GET  /api/v1/formations/catalogue/{id}/attestations/zip/   -> ZIP des PDF
+GET  /api/v1/formations/attestations/{id}/pdf/              -> PDF (A4 paysage)
+GET  /api/v1/formations/attestations/                      -> liste
+GET  /api/v1/formations/verification/{numero}/?sig=…       -> VÉRIFICATION PUBLIQUE
+```
+
+Rôles autorisés à délivrer : `super_admin`, `admin`, `chef_finance`,
+`membre_finance`. La vérification publique est ouverte à tous (comme le reçu) :
+la signature fait foi, et la page affiche l'attestation **enregistrée** dans
+le HUB (source de vérité, pas une capture).
+
+Jeu d'essai :
+
+```bash
+python seed_attestations_demo.py
+```
+
 ## Templates mail (charte DIGI COM, layout central `apps/mailing/layout.py`)
 
 `bienvenue_espace_client`, `facture_disponible` (auto à l'envoi), `relance_facture` (auto J+),

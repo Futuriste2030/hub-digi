@@ -46,7 +46,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VITE_API_URL=https://hub.digicom.ml/api/v1
-            VITE_PAIEMENT_ACTIF=false
+            VITE_PAIEMENT_ACTIF=true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

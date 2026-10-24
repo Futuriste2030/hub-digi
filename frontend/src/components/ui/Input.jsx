@@ -1,10 +1,25 @@
 /* Champs charte §6 : bordure 1px gris-300, focus bordure bleu Digi + anneau,
    erreur bordure + message explicite, désactivé opacité 55 %. */
+
 export function Label({ htmlFor, children }) {
   return (
     <label htmlFor={htmlFor} className="font-courant text-[15px] font-semibold text-gris-700">
       {children}
     </label>
+  );
+}
+
+/* Liste déroulante : même hauteur et même bordure que les champs Input.
+   Chevron signature et panneau d'options stylés globalement (index.css). */
+export function Select({ id, className = '', children, ...props }) {
+  return (
+    <select
+      id={id}
+      className={`h-11 w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
+      {...props}
+    >
+      {children}
+    </select>
   );
 }
 

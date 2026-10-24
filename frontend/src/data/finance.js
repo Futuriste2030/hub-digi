@@ -1,9 +1,10 @@
 import { CLIENTS } from './clients.js';
-import { lienPaiementFacture } from '../lib/paiement.js';
 
 /* Store mock Finance — endpoints DRF à venir :
    /finance/quotes/ /invoices/ /receipts/ /expenses/ + webhook passerelle.
-   lienPaiement vide tant que VITE_PAIEMENT_ACTIF=false (pas de lien mort). */
+   Pas de lien de paiement en maquette : le lien réel est SIGNÉ par le backend
+   et fourni par l'API (`lien_paiement` sur une facture, `lien_verification`
+   sur un reçu). Une URL construite côté front ne serait pas acceptée. */
 
 export const nombre = (s) => Number(String(s).replace(/[^0-9]/g, '')) || 0;
 
@@ -16,7 +17,7 @@ let FACTURES = CLIENTS.flatMap((c) =>
     clientId: c.id,
     clientEmail: c.email,
     lignes: lignesDe(f),
-    lienPaiement: lienPaiementFacture(f.numero),
+    lienPaiement: '',
   })),
 );
 
@@ -96,7 +97,7 @@ export function convertirDevis(numero) {
     clientId: d.clientId,
     clientEmail: CLIENTS.find((x) => x.id === d.clientId)?.email ?? '',
     lignes: d.lignes && d.lignes.length > 0 ? d.lignes : [{ description: d.objet, quantite: 1, montant: nombre(d.montant) }],
-    lienPaiement: lienPaiementFacture(d.numero.replace('DEV', 'FACT')),
+    lienPaiement: '',
   };
   FACTURES = [f, ...FACTURES];
   return f;
@@ -164,7 +165,7 @@ export function ajouterFacture({ clientId, lignes, date }) {
     clientId: c.id,
     clientEmail: c.email,
     lignes: lignesPropres,
-    lienPaiement: lienPaiementFacture(numero),
+    lienPaiement: '',
   };
   FACTURES = [f, ...FACTURES];
   return f;

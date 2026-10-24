@@ -113,6 +113,31 @@ def _qr_bloc(normal, qr, titre, legende):
     ], colWidths=[100 * mm])
 
 
+def _bloc_paiement(normal, lien):
+    """Bloc « PAYEZ ICI » : QR du lien signé + lien écrit en clair.
+
+    Le QR seul ne suffit pas : sur une facture imprimée, le client peut ne
+    pas pouvoir scanner (imprimante, mail, photo floue). Le lien est donc
+    écrit en dessous, cliquable en PDF, et le QR reste pour le scan direct.
+    Le montant, lui, n'est jamais dans le lien : il est recalculé par le
+    serveur à l'ouverture (apps/ligdicash/liens.py)."""
+    qr = _qr_image(lien)
+    if qr is None:
+        return None
+    url = propre(lien)
+    bloc = Table([
+        [qr],
+        [Paragraph("<font size=13 color='#4fa3dc'><b>PAYEZ ICI</b></font>", normal)],
+        [Paragraph(f"<font size=7 color='#32425b'><link href='{url}'>{url}</link></font>", normal)],
+    ], colWidths=[100 * mm])
+    bloc.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return bloc
+
+
 def _societe():
     try:
         from apps.core.models import SiteSettings
@@ -400,13 +425,13 @@ def pdf_facture(facture):
         f"<b>{propre(soc['delai'])}</b> · Statut <b>{propre(facture.get_statut_display())}</b> · {tva_txt}",
         normal))
     story.append(Spacer(1, 4 * mm))
-    # Paiement en ligne : QR/lien pay.digicom.ml uniquement si PAYMENT_ENABLED=1.
-    # Logique conservée, sortie neutralisée en attendant l'API (pas de lien mort).
-    paiement_actif = getattr(settings, "PAYMENT_ENABLED", False)
-    base_paiement = getattr(settings, "PAYMENT_URL", "https://pay.digicom.ml").rstrip("/")
-    lien = f"{base_paiement}/f/{facture.numero}" if paiement_actif else ""
+    # Paiement en ligne : QR = lien de paiement UNIQUE et signé de la facture
+    # (figé dans le document). Le montant, lui, reste calculé par le serveur.
+    from apps.ligdicash.liens import lien_paiement_facture
+
+    lien = lien_paiement_facture(facture.numero)
     story.append(_blocs(normal, "Émetteur", _emetteur(soc), "Facturé à",
-                        _client_lignes(facture, lien or None)))
+                        _client_lignes(facture)))
     story.append(Spacer(1, 4 * mm))
     story.append(_table_lignes(st, lignes, taux))
     story.append(Spacer(1, 3 * mm))
@@ -414,8 +439,19 @@ def pdf_facture(facture):
     story.append(Spacer(1, 3 * mm))
     story.append(Paragraph(
         f"Payé : <b>{_montant(facture.paye)}</b> — Solde : <b>{_montant(facture.solde)}</b>", normal))
-    code = _qr_bloc(normal, _qr_image(lien), "Scannez pour payer", f"{facture.numero} — {lien}") if lien else None
-    suivi = code
+    if getattr(facture, "inscription_id", None):
+        # Facture de FORMATION : le règlement se fait à l'agence (pas de
+        # paiement en ligne pour l'instant) -> référence interne, pas de lien.
+        ref = f"HUB-DIGI:{facture.numero}:{float(facture.solde or 0):g}"
+        suivi = _qr_bloc(normal, _qr_image(ref), "Règlement à l'agence", ref)
+    elif lien and facture.solde > 0:
+        suivi = _bloc_paiement(normal, lien)
+    else:
+        # Facture réglée (ou paiement en ligne désactivé) : QR de référence
+        # interne, pas de lien de paiement à inciter à payer.
+        ref = f"HUB-DIGI:{facture.numero}:{float(facture.solde or 0):g}"
+        titre = "Facture réglée" if facture.solde <= 0 else "Référence interne"
+        suivi = _qr_bloc(normal, _qr_image(ref), titre, ref)
     story += _pied(normal, soc, suivi=suivi)
     doc.build(story)
     buf.seek(0)
@@ -451,11 +487,12 @@ def pdf_recu(recu):
         f"Date de paiement : <b>{_date_fr(recu.cree_le)}</b> · "
         f"Moyen : <b>{propre(recu.get_moyen_display())}</b> · "
         f"Réf. transaction : <b>{propre(recu.ref_transaction or '—')}</b>", normal))
-    # Sans gateway : QR de vérification interne (pas de domaine pay.digicom.ml mort).
-    paiement_actif = getattr(settings, "PAYMENT_ENABLED", False)
-    base_paiement = getattr(settings, "PAYMENT_URL", "https://pay.digicom.ml").rstrip("/")
-    if paiement_actif:
-        qr_valeur = f"{base_paiement}/r/{recu.numero}?facture={recu.invoice.numero}&montant={float(recu.montant or 0):g}"
+    # Reçu : QR = lien de VÉRIFICATION unique et signé du reçu (même logique
+    # que la facture, propagé au reçu généré après le paiement).
+    from apps.ligdicash.liens import lien_verification_recu, paiement_en_ligne_actif
+
+    if paiement_en_ligne_actif():
+        qr_valeur = lien_verification_recu(recu.numero)
         legende = f"{qr_valeur} — scannez pour vérifier l'authenticité du reçu."
     else:
         qr_valeur = f"HUB-DIGI:{recu.numero}:{recu.invoice.numero}:{float(recu.montant or 0):g}"

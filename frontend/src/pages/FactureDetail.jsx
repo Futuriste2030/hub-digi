@@ -8,7 +8,7 @@ import { ROLES_FINANCE, ROLES_CHEF_FINANCE, peutVoir } from '../lib/acces.js';
 import { envoyerFacture, listerFactures, majFacture, payerFacture, relancerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
 import { messageErreur } from '../api/client.js';
 import { getEntreprise } from '../data/parametres.js';
-import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
+import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, copierLienPaiement } from '../lib/paiement.js';
 import { NonTrouve } from './Pages.jsx';
 
 /* Détail facture — API réelle : document + paiement + envoi + PDF serveur. */
@@ -48,12 +48,16 @@ export default function FactureDetail() {
       notifier({ type: 'info', titre: 'Paiement en ligne bientôt disponible', texte: MESSAGE_PAIEMENT_BIENTOT });
       return;
     }
-    try {
-      await navigator.clipboard.writeText(lienPaiementFacture(facture.numero));
-    } catch {
-      /* presse-papiers indisponible */
+    if (!facture.lien_paiement) {
+      notifier({ type: 'info', titre: 'Lien indisponible', texte: `${facture.numero} — rechargez la facture pour obtenir son lien de paiement.` });
+      return;
     }
-    notifier({ type: 'info', titre: 'Lien copié', texte: `Lien de paiement ${facture.numero} copié.` });
+    const ok = await copierLienPaiement(facture.lien_paiement);
+    notifier({
+      type: 'info',
+      titre: ok ? 'Lien copié' : 'Copie impossible',
+      texte: ok ? `Lien de paiement ${facture.numero} copié.` : 'Presse-papiers indisponible sur ce poste.',
+    });
   };
 
   const payer = async () => {
@@ -153,7 +157,8 @@ export default function FactureDetail() {
     clientEmail: facture.client_email ?? '',
     clientAdresse: facture.client_adresse ?? '',
     clientPhone: facture.client_phone ?? '',
-    lienPaiement: lienPaiementFacture(facture.numero) || undefined,
+    lienPaiement: facture.lien_paiement || undefined,
+    solde: Number(facture.solde ?? NaN),
     lignes: (facture.lignes ?? []).map((l) => ({ description: l.description, quantite: Number(l.quantite), montant: Number(l.montant) })),
   };
 

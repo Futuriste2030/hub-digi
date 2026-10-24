@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from .models import Devis, DevisLigne, Expense, FichePaie, Invoice, InvoiceLigne, LignePaie, Receipt
 from .pdf import pdf_devis, pdf_facture, pdf_recu
+from apps.ligdicash.liens import lien_paiement_facture
 
 
 class LigneSerializer(serializers.Serializer):
@@ -55,14 +56,21 @@ class InvoiceSerializer(serializers.ModelSerializer):
     client_phone = serializers.SerializerMethodField()
     project_titre = serializers.CharField(source="project.titre", read_only=True)
     formation_titre = serializers.CharField(source="inscription.formation.titre", read_only=True)
+    # Lien de paiement unique et signé (figé dans le QR de la facture).
+    lien_paiement = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
         fields = ["id", "client", "inscription", "client_nom", "client_email", "client_adresse",
                   "client_phone", "formation_titre", "project", "project_titre", "numero",
                   "type_doc", "tva_active", "statut", "envoyee_le", "total", "paye", "solde",
-                  "lignes", "envoyer_immediat", "cree_le"]
+                  "lignes", "envoyer_immediat", "lien_paiement", "cree_le"]
         read_only_fields = ["numero", "envoyee_le"]
+
+    def get_lien_paiement(self, obj):
+        from apps.ligdicash.liens import lien_paiement_facture
+
+        return lien_paiement_facture(obj.numero)
 
     def get_client_nom(self, obj):
         return obj.destinataire_nom
@@ -96,13 +104,49 @@ class ReceiptSerializer(serializers.ModelSerializer):
     client_email = serializers.SerializerMethodField()
     client_adresse = serializers.SerializerMethodField()
     client_phone = serializers.SerializerMethodField()
+    # Lien de vérification unique et signé (figé dans le QR du reçu).
+    lien_verification = serializers.SerializerMethodField()
+    # Références techniques du paiement (réconciliation / support opérateur).
+    # Le reçu garde notre réf marchand (ref_transaction) ; la réf LigdiCash
+    # (request_id) et l'opérateur vivent dans PayinTransaction.
+    ref_ligdicash = serializers.SerializerMethodField()
+    paiement_operateur = serializers.SerializerMethodField()
+    paiement_client = serializers.SerializerMethodField()
 
     class Meta:
         model = Receipt
         fields = ["id", "invoice", "facture_numero", "client_nom", "client_email",
                   "client_adresse", "client_phone", "numero", "montant", "moyen",
-                  "ref_transaction", "cree_le"]
+                  "ref_transaction", "lien_verification", "ref_ligdicash",
+                  "paiement_operateur", "paiement_client", "cree_le"]
         read_only_fields = ["numero"]
+
+    def _paiement(self, obj):
+        """Transaction LigdiCash liée au reçu (par notre réf marchand)."""
+        if not obj.ref_transaction:
+            return None
+        from apps.ligdicash.models import PayinTransaction
+
+        return PayinTransaction.objects.filter(transaction_id=obj.ref_transaction).first()
+
+    def get_ref_ligdicash(self, obj):
+        """request_id LigdiCash : la référence à donner au support."""
+        paiement = self._paiement(obj)
+        return (paiement.request_id or "") if paiement else ""
+
+    def get_paiement_operateur(self, obj):
+        paiement = self._paiement(obj)
+        return (paiement.operator_name or "") if paiement else ""
+
+    def get_paiement_client(self, obj):
+        """Numéro payeur (indicatif pays)."""
+        paiement = self._paiement(obj)
+        return (paiement.customer or "") if paiement else ""
+
+    def get_lien_verification(self, obj):
+        from apps.ligdicash.liens import lien_verification_recu
+
+        return lien_verification_recu(obj.numero)
 
     def get_client_nom(self, obj):
         return obj.invoice.destinataire_nom
@@ -206,7 +250,10 @@ def _passer_envoyee(invoice):
         "facture_disponible", invoice.client.email,
         {"societe": invoice.client.nom_societe, "numero": invoice.numero,
          "total": f"{float(invoice.total):,.0f}".replace(",", " "),
-         "espace_url": url_espace},
+         "espace_url": url_espace,
+         # Facture de FORMATION : pas de paiement en ligne (règlement à
+         # l'agence) -> on n'envoie pas de lien de paiement.
+         "lien_paiement": "" if invoice.inscription_id else lien_paiement_facture(invoice.numero)},
         department_slug="finance", client=invoice.client,
     )
     return invoice
@@ -252,7 +299,8 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
         send_templated_mail(
             "relance_facture", invoice.destinataire_email,
             {"societe": invoice.destinataire_nom, "numero": invoice.numero,
-             "solde": f"{float(invoice.solde):,.0f}".replace(",", " ")},
+             "solde": f"{float(invoice.solde):,.0f}".replace(",", " "),
+             "lien_paiement": lien_paiement_facture(invoice.numero)},
             department_slug="finance", client=invoice.client,
         )
         return Response(InvoiceSerializer(invoice).data)

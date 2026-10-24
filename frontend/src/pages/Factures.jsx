@@ -11,7 +11,7 @@ import { ROLES_FINANCE, ROLES_CHEF_FINANCE, peutVoir } from '../lib/acces.js';
 import { creerFacture, envoyerFacture, listerFactures, payerFacture, relancerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
 import { listerClients } from '../api/clients.js';
 import { messageErreur } from '../api/client.js';
-import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
+import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, copierLienPaiement } from '../lib/paiement.js';
 import { fCFA } from '../utils/stats.js';
 
 /* Factures globales — API réelle (SPEC §5.7 : brouillon -> payée, reçu auto, template mail). */
@@ -225,12 +225,16 @@ export default function Factures() {
       notifier({ type: 'info', titre: 'Paiement en ligne bientôt disponible', texte: MESSAGE_PAIEMENT_BIENTOT });
       return;
     }
-    try {
-      await navigator.clipboard.writeText(lienPaiementFacture(f.numero));
-    } catch {
-      /* presse-papiers indisponible */
+    if (!f.lien_paiement) {
+      notifier({ type: 'info', titre: 'Lien indisponible', texte: `${f.numero} — rechargez la facture pour obtenir son lien de paiement.` });
+      return;
     }
-    notifier({ type: 'info', titre: 'Lien copié', texte: `Lien de paiement ${f.numero} copié.` });
+    const ok = await copierLienPaiement(f.lien_paiement);
+    notifier({
+      type: 'info',
+      titre: ok ? 'Lien copié' : 'Copie impossible',
+      texte: ok ? `Lien de paiement ${f.numero} copié.` : 'Presse-papiers indisponible sur ce poste.',
+    });
   };
 
   const payer = async (f, data) => {
@@ -301,8 +305,8 @@ export default function Factures() {
         </span>
       </div>
 
-      <div className="mt-esp-6 grid grid-cols-1 gap-esp-4 sm:grid-cols-3">
-        <div className="relative sm:col-span-1">
+      <div className="mt-esp-6 grid grid-cols-1 gap-esp-4 sm:grid-cols-2 md:grid-cols-[minmax(0,1fr)_180px_220px]">
+        <div className="relative sm:col-span-2 md:col-span-1">
           <Search size={20} aria-hidden="true" className="pointer-events-none absolute left-esp-3 top-1/2 -translate-y-1/2 text-gris-400" />
           <input type="search" value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Numéro, client…" aria-label="Rechercher une facture" className="h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 pl-11 pr-esp-4 font-courant text-[15px] text-gris-700 placeholder:text-gris-400 focus:border-digi" />
         </div>
@@ -310,7 +314,7 @@ export default function Factures() {
           <option value="tous">Tous types</option>
           {TYPES_DOC.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
-        <select value={statut} onChange={(e) => setStatut(e.target.value)} aria-label="Filtrer par statut" className="h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi sm:max-w-96">
+        <select value={statut} onChange={(e) => setStatut(e.target.value)} aria-label="Filtrer par statut" className="h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px] text-gris-700 focus:border-digi">
           {STATUTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
       </div>

@@ -1,15 +1,16 @@
-import { useEffect, useRef } from 'react';
-import JsBarcode from 'jsbarcode';
+import QRCode from 'react-qr-code';
 import Logo from '../Logo.jsx';
 import Cachet from './Cachet.jsx';
 import { fCFA } from '../../utils/stats.js';
 
 /* Document facture — montants stockés TTC, HT recalculé au taux de la facture
    (tva_active côté API, 0 par défaut : pas de TVA au Mali).
-   PDF : window.print() avec la feuille .dg-print-doc (voir index.css). */
+   PDF : window.print() avec la feuille .dg-print-doc (voir index.css).
+   Pied : QR = lien de paiement signé de la facture + « PAYEZ ICI » + le lien
+   écrit en clair (le QR seul ne suffit pas quand le client ne peut pas
+   scanner). Le code-barres du numéro a été supprimé : il ne servait à rien. */
 
 export default function FactureDoc({ facture, entreprise }) {
-  const barcodeRef = useRef(null);
   const estProforma = (facture.typeDoc ?? facture.type_doc ?? 'facture') === 'proforma';
   const titreDoc = estProforma ? 'Facture Proforma' : 'Facture';
   // NIF/RCCM affichés uniquement s'ils sont renseignés dans /parametres.
@@ -18,23 +19,12 @@ export default function FactureDoc({ facture, entreprise }) {
     String(entreprise.rccm ?? '').trim() && `RCCM ${String(entreprise.rccm).trim()}`,
   ].filter(Boolean).join(' · ');
 
-  useEffect(() => {
-    if (barcodeRef.current) {
-      try {
-        JsBarcode(barcodeRef.current, facture.numero, {
-          format: 'CODE128',
-          displayValue: true,
-          fontSize: 13,
-          height: 44,
-          margin: 0,
-          background: '#ffffff',
-          lineColor: '#0B182B',
-        });
-      } catch {
-        /* code-barres indisponible, le numéro reste lisible */
-      }
-    }
-  }, [facture.numero]);
+  // Lien de paiement signé (fourni par l'API). Sans lui : QR de référence interne.
+  const lienPaiement = facture.lienPaiement || '';
+  // Une facture déjà réglée n'invite pas à payer : QR interne + mention.
+  const solde = Number(facture.solde ?? NaN);
+  const reglee = Number.isFinite(solde) && solde <= 0;
+  const qrValeur = lienPaiement && !reglee ? lienPaiement : `HUB-DIGI:${facture.numero}`;
 
   const taux = Number(facture.tauxTva ?? entreprise.tauxTva ?? 0);
   const ttc = facture.lignes.reduce((s, l) => s + l.montant * l.quantite, 0);
@@ -81,7 +71,6 @@ export default function FactureDoc({ facture, entreprise }) {
           {facture.clientAdresse && <p className="font-courant text-[15px] text-gris-700">{facture.clientAdresse}</p>}
           {facture.clientPhone && <p className="font-courant text-[15px] text-gris-700 dg-tnum">{facture.clientPhone}</p>}
           {facture.clientEmail && <p className="font-mono text-[13px] text-gris-600">{facture.clientEmail}</p>}
-          {facture.lienPaiement && <p className="mt-esp-1 font-mono text-[13px] text-gris-600">{facture.lienPaiement}</p>}
         </div>
       </div>
 
@@ -119,9 +108,26 @@ export default function FactureDoc({ facture, entreprise }) {
       </div>
 
       <div className="flex flex-wrap items-end justify-between gap-esp-4 px-esp-6 py-esp-5">
-        <div>
-          <svg ref={barcodeRef} role="img" aria-label={`Code-barres ${facture.numero}`} />
-          <p className="dg-legende mt-esp-2 max-w-[52ch]">{entreprise.conditions}</p>
+        <div className="flex flex-col items-center gap-esp-2">
+          <QRCode value={qrValeur} size={112} aria-label={`QR ${reglee ? 'de référence' : 'de paiement'} ${facture.numero}`} />
+          {lienPaiement && !reglee ? (
+            <>
+              <p className="font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-digi-signal">
+                Payez ici
+              </p>
+              <a
+                href={lienPaiement}
+                className="max-w-[56ch] break-all text-center font-mono text-[11px] text-gris-600 underline decoration-gris-400 underline-offset-2"
+              >
+                {lienPaiement}
+              </a>
+            </>
+          ) : (
+            <p className="font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">
+              {reglee ? 'Facture réglée' : 'Référence interne'}
+            </p>
+          )}
+          <p className="dg-legende mt-esp-1 max-w-[52ch] text-center">{entreprise.conditions}</p>
         </div>
         <div className="flex items-end gap-esp-5">
           <Cachet entreprise={entreprise} cachetUrl={entreprise.cachetFinance} signatureUrl={entreprise.signatureFinance} />

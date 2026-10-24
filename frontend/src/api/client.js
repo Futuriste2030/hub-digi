@@ -5,7 +5,13 @@ import axios from 'axios';
 
 export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1';
 
-export const api = axios.create({ baseURL: API_URL });
+/* En-têtes par défaut : "ngrok-skip-browser-warning" neutralise la page
+   d'avertissement interstitielle de ngrok sur le tunnel de dev (inutile et
+   ignoré en prod). */
+export const api = axios.create({
+  baseURL: API_URL,
+  headers: { 'ngrok-skip-browser-warning': '1' },
+});
 
 let accessToken = null;
 let onDeconnecte = null;

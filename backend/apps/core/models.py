@@ -106,6 +106,15 @@ class SiteSettings(models.Model):
     cachet_juridique = models.ImageField(upload_to="cachets/", null=True, blank=True)
     signature_juridique = models.ImageField(upload_to="cachets/", null=True, blank=True)
     cachet_secretariat = models.ImageField(upload_to="cachets/", null=True, blank=True)
+    # Formations : cachet + signature du directeur des formations (attestations).
+    cachet_formation = models.ImageField(upload_to="cachets/", null=True, blank=True)
+    signature_formation = models.ImageField(upload_to="cachets/", null=True, blank=True)
+    signataire_formation = models.CharField(
+        max_length=100, default="La Direction des Formations", blank=True,
+        help_text="Signataire imprimé sur les attestations de formation.")
+    fonction_formation = models.CharField(
+        max_length=100, default="Chef Département Ingénierie Informatique", blank=True,
+        help_text="Fonction du signataire, imprimée sur les attestations.")
 
     def __str__(self):
         return self.raison

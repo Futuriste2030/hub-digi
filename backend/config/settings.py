@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.projects_dev",
     "apps.com",
     "apps.finance",
+    "apps.ligdicash",
     "apps.formations",
     "apps.fournisseurs",
     "apps.rh",
@@ -136,11 +137,11 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# Paiement en ligne : logique conservée, sortie neutralisée tant que PAYMENT_ENABLED=0.
-# Backend payer/ reste l'encaissement manuel guichet ; seuls les QR/liens
-# pay.digicom.ml imprimés sur PDF sont masqués (apps/finance/pdf.py).
+# Paiement en ligne : master switch. PAYMENT_ENABLED=0 neutralise les QR/liens
+# de paiement imprimés (apps/finance/pdf.py) ; PAYMENT_URL n'est plus utilisé
+# (le lien de paiement est désormais unique par facture, sur le hub).
 PAYMENT_ENABLED = os.getenv("PAYMENT_ENABLED", "0") == "1"
-PAYMENT_URL = os.getenv("PAYMENT_URL", "https://pay.digicom.ml")
+PAYMENT_URL = os.getenv("PAYMENT_URL", "")
 
 # --- CORS : frontend Vite (5199) en dev ---
 CORS_ALLOWED_ORIGINS = [
@@ -204,6 +205,26 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", str(EMAIL_PORT == 465)) == "True"
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", str(EMAIL_PORT == 587 and not EMAIL_USE_SSL)) == "True"
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "15") or 15)
+
+# --- LigdiCash : payin avec redirection (SPEC §5.7) ---
+# Clés secrètes : backend/.env uniquement (jamais commitées, jamais côté front).
+# Les appels API passent tous par le backend (apps/ligdicash/services.py).
+LIGDICASH_ENABLED = os.getenv("LIGDICASH_ENABLED", "0") == "1"
+LIGDICASH_API_KEY = os.getenv("LIGDICASH_API_KEY", "")
+LIGDICASH_API_TOKEN = os.getenv("LIGDICASH_API_TOKEN", "")
+LIGDICASH_BASE_URL = os.getenv("LIGDICASH_BASE_URL", "https://app.ligdicash.com")
+LIGDICASH_TIMEOUT = int(os.getenv("LIGDICASH_TIMEOUT", "20") or 20)
+# Nom affiché sur la page de paiement LigdiCash.
+LIGDICASH_STORE_NAME = os.getenv("LIGDICASH_STORE_NAME", "Digi Com & Technologies")
+LIGDICASH_STORE_URL = os.getenv("LIGDICASH_STORE_URL") or FRONTEND_URL
+# URL publique de notification (POST) — doit être joignable depuis Internet.
+LIGDICASH_CALLBACK_URL = os.getenv("LIGDICASH_CALLBACK_URL", "")
+# Vérifier que la page de paiement LigdiCash existe avant de rediriger le client
+# (LigdiCash peut exposer une facture via /confirm tout en servant une 404).
+LIGDICASH_VERIF_PAGE = os.getenv("LIGDICASH_VERIF_PAGE", "1") == "1"
+# Fenêtre de reprise d'une tentative en cours (double-clic). La page LigdiCash
+# expire ~16 min après la création : ne pas réutiliser plus longtemps.
+LIGDICASH_FENETRE_REPRISE_MINUTES = int(os.getenv("LIGDICASH_FENETRE_REPRISE_MINUTES", "15") or 15)
 
 # --- Celery (relances, SLA, mails async — SPEC §2) ---
 # Sans Redis installé, les tâches tournent en mode eager (synchrone, sans broker).

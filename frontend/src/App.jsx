@@ -59,6 +59,12 @@ const Chat = lazy(() => import('./pages/Chat.jsx'));
 const ChatGroupes = lazy(() => import('./pages/ChatGroupes.jsx'));
 const Utilisateurs = lazy(() => import('./pages/Utilisateurs.jsx'));
 const UtilisateurNouveau = lazy(() => import('./pages/UtilisateurNouveau.jsx'));
+/* Pages de paiement publiques (liens uniques signés, cibles des QR imprimés). */
+const PaiementFacture = lazy(() => import('./pages/PaiementFacture.jsx'));
+const PaiementRecu = lazy(() => import('./pages/PaiementRecu.jsx'));
+const PaiementRetour = lazy(() => import('./pages/PaiementRetour.jsx'));
+/* Vérification publique d'une attestation (cible du QR imprimé sur le document). */
+const Attestation = lazy(() => import('./pages/Attestation.jsx'));
 import { NonTrouve, FEATURE_ROUTES, SectionPage } from './pages/Pages.jsx';
 
 const ROLES_TICKETS = [...CHEFS, 'membre_com', 'membre_dev', 'membre_finance', 'membre_rh', 'membre_juridique'];
@@ -76,6 +82,17 @@ export default function App() {
         <Route path="espace/:slug" element={<EspaceClient />} />
         <Route path="espace/:slug/:code" element={<EspaceClient />} />
         <Route path="espace-client" element={<Navigate to="/espace" replace />} />
+        {/* Paiement en ligne (LigdiCash) : pages publiques hors espace client.
+            /paiement/facture/<numero> = lien unique figé dans le QR de la facture ;
+            /paiement/recu/<numero> = lien unique figé dans le QR du reçu ;
+            /paiement/retour et /paiement/annule = retour du client après LigdiCash. */}
+        <Route path="paiement/facture/:numero" element={<PaiementFacture />} />
+        <Route path="paiement/recu/:numero" element={<PaiementRecu />} />
+        <Route path="paiement/retour" element={<PaiementRetour />} />
+        {/* Attestation de formation : /attestation/<numero> = lien unique signé,
+            cible du QR de traçabilité imprimé sur le document. */}
+        <Route path="attestation/:numero" element={<Attestation />} />
+        <Route path="paiement/annule" element={<PaiementRetour />} />
           <Route element={<AppLayout />}>
             <Route index element={<Accueil />} />
             {/* Tableau de bord : /dashboard (super admin) ou /dashboard/:departement. */}

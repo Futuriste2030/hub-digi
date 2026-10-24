@@ -7,6 +7,9 @@ brouillon (ligne = prix formation). Rien n'est envoyé : le clic WhatsApp
 (passe en envoyée) et l'encaissement (`payer()` -> reçu auto) sont manuels.
 """
 
+import zipfile
+from io import BytesIO
+
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
@@ -21,7 +24,43 @@ from django.utils.crypto import constant_time_compare
 
 from apps.finance.models import Invoice, InvoiceLigne
 
-from .models import Formation, InscriptionFormation, ParticipantFormation
+from . import services
+from .models import (AttestationFormation, Formation, InscriptionFormation,
+                     ParticipantFormation)
+
+# Rôles autorisés à délivrer des attestations (et à les télécharger).
+ROLES_ATTESTATION = ("super_admin", "admin", "chef_finance", "membre_finance")
+
+
+def _peut_delivrer(user):
+    return getattr(user, "role", "") in ROLES_ATTESTATION
+
+
+def _slug(nom):
+    return slugify(nom or "") or "document"
+
+
+def _statuts_demandes(brut):
+    """Statuts d'inscription éligibles (liste séparée par virgules)."""
+    if not brut:
+        return services.STATUTS_DEFAUT
+    if isinstance(brut, str):
+        brut = [b.strip() for b in brut.split(",")]
+    tous = [choix[0] for choix in InscriptionFormation.STATUTS]
+    valides = tuple(s for s in tous if s in (brut or []))
+    return valides or services.STATUTS_DEFAUT
+
+
+def _date_demande(valeur):
+    """Date de délivrance (ISO) ou None."""
+    if not valeur:
+        return None
+    from datetime import date
+
+    try:
+        return date.fromisoformat(str(valeur)[:10])
+    except (TypeError, ValueError):
+        return None
 
 
 def telephone_whatsapp(brut):
@@ -35,29 +74,37 @@ def telephone_whatsapp(brut):
 
 
 def message_whatsapp(invoice):
-    """Message prêt à envoyer : inscription confirmée + facture + lien de paiement.
+    """Message prêt à envoyer : inscription confirmée + facture + montant.
 
-    Le lien pay vit avec la facture : le client paie lui-même sur pay.digicom.ml,
-    qui notifie le HUB (webhook /finance/paiements/webhook/) -> reçu auto.
-    Encaisser reste le fallback guichet."""
-    from django.conf import settings
+    Pour une FORMATION, il n'y a pas de lien de paiement (le règlement se
+    fait à l'agence, saisi manuellement via le bouton « Encaisser ») : on
+    renvoie le message de confirmation + le montant, sans URL de paiement.
+    """
+    from apps.ligdicash.liens import lien_paiement_facture
 
     insc = invoice.inscription
     prenom = (insc.participant.full_name or "").split()[0] if insc and insc.participant else ""
     titre = insc.formation.titre if insc else ""
     total = f"{float(invoice.total or 0):,.0f}".replace(",", " ")
-    base = getattr(settings, "PAYMENT_URL", "https://pay.digicom.ml").rstrip("/")
+    if insc:
+        paiement = " Règlement à l'agence (Digi Com & Technologies)."
+    else:
+        lien = lien_paiement_facture(invoice.numero)
+        paiement = f" Payez ici : {lien}" if lien else ""
     return (
         f"Bonjour {prenom}, votre inscription à la formation « {titre} » est confirmée. "
-        f"Facture {invoice.numero} : {total} F. Payez ici : {base}/f/{invoice.numero} "
+        f"Facture {invoice.numero} : {total} F.{paiement} "
         "Digi Com & Technologies."
     )
 
 
 class FormationSerializer(serializers.ModelSerializer):
+    nb_inscriptions = serializers.IntegerField(source="inscriptions.count", read_only=True)
+
     class Meta:
         model = Formation
-        fields = ["id", "slug", "titre", "prix", "duree", "active", "cree_le"]
+        fields = ["id", "slug", "titre", "prix", "duree", "date_debut", "date_fin", "lieu",
+                  "departement", "active", "nb_inscriptions", "cree_le"]
 
 
 class InscriptionSerializer(serializers.ModelSerializer):
@@ -72,6 +119,9 @@ class InscriptionSerializer(serializers.ModelSerializer):
     facture_total = serializers.SerializerMethodField()
     facture_paye = serializers.SerializerMethodField()
     facture_solde = serializers.SerializerMethodField()
+    attestation_id = serializers.SerializerMethodField()
+    attestation_numero = serializers.SerializerMethodField()
+    attestation_lien = serializers.SerializerMethodField()
 
     class Meta:
         model = InscriptionFormation
@@ -79,7 +129,8 @@ class InscriptionSerializer(serializers.ModelSerializer):
                   "participant_nom", "participant_email", "participant_telephone",
                   "reference", "statut", "message", "reference_site",
                   "facture_id", "facture_numero", "facture_statut",
-                  "facture_total", "facture_paye", "facture_solde", "cree_le"]
+                  "facture_total", "facture_paye", "facture_solde",
+                  "attestation_id", "attestation_numero", "attestation_lien", "cree_le"]
 
     def _facture(self, obj):
         return obj.factures.order_by("-cree_le").first()
@@ -108,6 +159,53 @@ class InscriptionSerializer(serializers.ModelSerializer):
         f = self._facture(obj)
         return float(f.solde or 0) if f else 0
 
+    def _attestation(self, obj):
+        return AttestationFormation.objects.filter(inscription=obj).first()
+
+    def get_attestation_id(self, obj):
+        a = self._attestation(obj)
+        return a.id if a else None
+
+    def get_attestation_numero(self, obj):
+        a = self._attestation(obj)
+        return a.numero if a else ""
+
+    def get_attestation_lien(self, obj):
+        from .liens import lien_verification_attestation
+
+        a = self._attestation(obj)
+        return lien_verification_attestation(a.numero) if a else ""
+
+
+class AttestationSerializer(serializers.ModelSerializer):
+    """Attestation de formation — expose le lien public de vérification (le QR)."""
+
+    inscription_id = serializers.IntegerField(source="inscription.id", read_only=True)
+    inscription_reference = serializers.CharField(source="inscription.reference", read_only=True)
+    participant_nom = serializers.CharField(source="inscription.participant.full_name", read_only=True)
+    participant_email = serializers.CharField(source="inscription.participant.email", read_only=True)
+    formation_id = serializers.IntegerField(source="inscription.formation.id", read_only=True)
+    formation_titre = serializers.CharField(source="inscription.formation.titre", read_only=True)
+    formation_slug = serializers.CharField(source="inscription.formation.slug", read_only=True)
+    lien_verification = serializers.SerializerMethodField()
+    pdf_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttestationFormation
+        fields = ["id", "numero", "date_delivrance", "mention", "genere_le",
+                  "inscription_id", "inscription_reference",
+                  "participant_nom", "participant_email",
+                  "formation_id", "formation_titre", "formation_slug",
+                  "lien_verification", "pdf_url"]
+
+    def get_lien_verification(self, obj):
+        from .liens import lien_verification_attestation
+
+        return lien_verification_attestation(obj.numero)
+
+    def get_pdf_url(self, obj):
+        return f"/api/v1/formations/attestations/{obj.id}/pdf/"
+
 
 class FormationViewSet(viewsets.ModelViewSet):
     queryset = Formation.objects.all()
@@ -115,6 +213,63 @@ class FormationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filterset_fields = ["active"]
     search_fields = ["slug", "titre"]
+
+    @action(detail=True, methods=["post"], url_path="attestations")
+    def attestations(self, request, pk=None):
+        """Génère les attestations de TOUTES les inscriptions éligibles.
+
+        Body : {mention?, date_delivrance?, statuts?, force?}
+        `statuts` = statuts d'inscription éligibles (défaut : « terminee »).
+        `force` = met à jour la mention des attestations déjà émises.
+        """
+        formation = self.get_object()
+        if not _peut_delivrer(request.user):
+            return Response({"detail": "Délivrance d'attestations réservée à l'administration "
+                                       "et à la finance."}, status=403)
+        statuts = _statuts_demandes(request.data.get("statuts"))
+        recap = services.generer_attestations_formation(
+            formation,
+            statuts=statuts,
+            mention=(request.data.get("mention") or "").strip(),
+            date_delivrance=_date_demande(request.data.get("date_delivrance")),
+            force=bool(request.data.get("force")),
+        )
+        return Response({
+            "formation": recap["formation"],
+            "creees": [AttestationSerializer(a).data for a in recap["creees"]],
+            "creees_nombre": len(recap["creees"]),
+            "existantes": [AttestationSerializer(a).data for a in recap["existantes"]],
+            "existantes_nombre": len(recap["existantes"]),
+            "ignorees": recap["ignorees"],
+            "ignorees_nombre": len(recap["ignorees"]),
+        })
+
+    @action(detail=True, methods=["get"], url_path="attestations/zip")
+    def attestations_zip(self, request, pk=None):
+        """ZIP des attestations de la formation (impression / distribution)."""
+        formation = self.get_object()
+        if not _peut_delivrer(request.user):
+            return Response({"detail": "Téléchargement réservé à l'administration et à la finance."},
+                            status=403)
+        attestations = (AttestationFormation.objects
+                        .filter(inscription__formation=formation)
+                        .select_related("inscription__participant", "inscription__formation")
+                        .order_by("inscription__participant__full_name"))
+        if not attestations.exists():
+            return Response({"detail": "Aucune attestation à télécharger pour cette formation."},
+                            status=404)
+        from django.http import FileResponse
+
+        from .pdf import pdf_attestation
+
+        tampon = BytesIO()
+        with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as archive:
+            for attestation in attestations:
+                nom = f"{attestation.numero}_{_slug(attestation.inscription.participant.full_name)}.pdf"
+                archive.writestr(nom, pdf_attestation(attestation).read())
+        tampon.seek(0)
+        nom_zip = f"attestations-{_slug(formation.titre)}.zip"
+        return FileResponse(tampon, as_attachment=True, filename=nom_zip)
 
 
 class InscriptionViewSet(viewsets.ModelViewSet):
@@ -137,6 +292,33 @@ class InscriptionViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     throttle_scope = "webhook"
+
+    @action(detail=True, methods=["post"], url_path="attestation")
+    def attestation(self, request, pk=None):
+        """Délivre (ou retourne) l'attestation de CETTE inscription.
+
+        Body : {mention?, date_delivrance?, force?}
+        """
+        inscription = self.get_object()
+        if not _peut_delivrer(request.user):
+            return Response({"detail": "Délivrance d'attestations réservée à l'administration "
+                                       "et à la finance."}, status=403)
+        statuts = _statuts_demandes(request.data.get("statuts")) \
+            if request.data.get("statuts") else services.STATUTS_DEFAUT
+        if not services.eligible(inscription, statuts):
+            return Response({
+                "detail": f"Inscription en statut « {inscription.get_statut_display()} » : "
+                          "non éligible à une attestation.",
+            }, status=400)
+        attestation, creee = services.generer_attestation(
+            inscription,
+            mention=(request.data.get("mention") or "").strip(),
+            date_delivrance=_date_demande(request.data.get("date_delivrance")),
+            force=bool(request.data.get("force")),
+        )
+        data = AttestationSerializer(attestation).data
+        data["creee"] = creee
+        return Response(data, status=201 if creee else 200)
 
     def create(self, request, *args, **kwargs):
         """Soumission vitrine (publique) : dédup email+formation, facture brouillon auto."""
@@ -228,3 +410,67 @@ class ParticipantViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ParticipantSerializer
     permission_classes = [IsAuthenticated]
     search_fields = ["full_name", "email", "phone"]
+
+
+class AttestationViewSet(viewsets.ReadOnlyModelViewSet):
+    """Attestations délivrées — lecture (admin/finance) et téléchargement du PDF."""
+
+    queryset = (AttestationFormation.objects
+                .select_related("inscription__participant", "inscription__formation").all())
+    serializer_class = AttestationSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ["inscription__formation"]
+    search_fields = ["numero", "inscription__participant__full_name",
+                     "inscription__participant__email", "inscription__formation__titre"]
+
+    @action(detail=True, methods=["get"], url_path="pdf")
+    def pdf(self, request, pk=None):
+        """Télécharge le PDF de l'attestation (A4 paysage)."""
+        from django.http import FileResponse
+
+        from .pdf import pdf_attestation
+
+        attestation = self.get_object()
+        return FileResponse(pdf_attestation(attestation), as_attachment=True,
+                            filename=f"{attestation.numero}.pdf")
+
+
+class AttestationPubliqueView(APIView):
+    """Vérification PUBLIQUE d'une attestation — cible du QR imprimé.
+
+    Public comme le reçu : le lien signé (`?sig=`) fait foi. On affiche
+    l'attestation ENREGISTRÉE dans le HUB (source de vérité), pas une capture.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, numero):
+        from .liens import verifier_lien
+
+        signature = request.query_params.get("sig", "")
+        if not verifier_lien(numero, signature):
+            return Response({"detail": "Lien de vérification invalide."}, status=403)
+        attestation = (AttestationFormation.objects
+                       .select_related("inscription__participant",
+                                        "inscription__formation")
+                       .filter(numero=numero).first())
+        if attestation is None:
+            return Response({"detail": "Attestation introuvable."}, status=404)
+        inscription = attestation.inscription
+        formation = inscription.formation
+        return Response({
+            "numero": attestation.numero,
+            "date_delivrance": attestation.date_delivrance,
+            "mention": attestation.mention,
+            "genere_le": attestation.genere_le,
+            "participant": inscription.participant.full_name,
+            "participant_email": inscription.participant.email,
+            "inscription": inscription.reference,
+            "formation": formation.titre,
+            "formation_duree": formation.duree,
+            "formation_date_debut": formation.date_debut,
+            "formation_date_fin": formation.date_fin,
+            "formation_lieu": formation.lieu,
+            "emetteur": settings.FRONTEND_URL,
+        })

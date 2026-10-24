@@ -2,7 +2,6 @@ import QRCode from 'react-qr-code';
 import Logo from '../Logo.jsx';
 import Cachet from './Cachet.jsx';
 import { getFacture } from '../../data/finance.js';
-import { PAIEMENT_EN_LIGNE_ACTIF, lienVerifRecu } from '../../lib/paiement.js';
 import { fCFA } from '../../utils/stats.js';
 
 /* Document reçu — même charte que facture/devis :
@@ -11,23 +10,43 @@ import { fCFA } from '../../utils/stats.js';
 
 const montantNombre = (s) => Number(String(s ?? '').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
 
-export default function RecuDoc({ recu, entreprise }) {
+/* Le reçu arrive de l'API en snake_case (ref_transaction, client_nom…) et
+   d'une maquette en camelCase : on lit les deux. */
+const MOYEN_LABEL = { especes: 'Espèces', virement: 'Virement', mobile_money: 'Mobile Money' };
+const dateFr = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR');
+};
+
+export default function RecuDoc({ recu, entreprise, tech = false }) {
   const lignesReelles = recu.lignes?.length > 0 ? recu.lignes : null;
   const facture = lignesReelles
     ? { lignes: recu.lignes, date: recu.factureDate, objet: recu.objet }
     : getFacture(recu.facture);
   const lignes = lignesReelles ?? facture?.lignes ?? [];
-  const client = recu.client || facture?.client || '—';
-  const clientEmail = recu.clientEmail || facture?.clientEmail || '';
-  const clientAdresse = recu.clientAdresse || '';
-  const clientPhone = recu.clientPhone || '';
+  const client = recu.client || recu.client_nom || facture?.client || '—';
+  const clientEmail = recu.clientEmail || recu.client_email || '';
+  const clientAdresse = recu.clientAdresse || recu.client_adresse || '';
+  const clientPhone = recu.clientPhone || recu.client_phone || '';
+  const numeroFacture = recu.facture || recu.facture_numero || '';
+  const date = recu.date || dateFr(recu.cree_le);
+  const moyen = recu.moyenLabel || MOYEN_LABEL[recu.moyen] || recu.moyen || '';
+  /* Référence de la transaction de paiement : PAI-… (mobile money) ou la
+     référence saisie au guichet. */
+  const refTransaction = recu.refTransaction ?? recu.ref_transaction ?? '';
+  /* Références techniques : utiles au support et à la réconciliation
+     opérateur, inutile pour le client (prop `tech`). */
+  const refLigdiCash = recu.ref_ligdicash || recu.refLigdicash || '';
+  const operateur = recu.paiement_operateur || recu.paiementOperateur || '';
+  const payeur = recu.paiement_client || recu.paiementClient || '';
   const totalLignes = lignes.reduce((s, l) => s + l.montant * l.quantite, 0);
   const montantRecu = montantNombre(recu.montant) || totalLignes;
   const totalFacture = facture ? lignes.reduce((s, l) => s + l.montant * l.quantite, 0) : totalLignes;
   const reste = Math.max(0, totalFacture - montantRecu);
-  const objet = recu.objet ?? facture?.objet ?? `Règlement ${recu.facture}`;
-  /* Sans gateway : QR de vérification interne (pas de domaine pay.digicom.ml mort). Logique conservée. */
-  const qrValeur = lienVerifRecu(recu.numero, recu.facture, montantRecu);
+  const objet = recu.objet ?? facture?.objet ?? `Règlement ${numeroFacture}`;
+  /* QR de vérification : lien unique et signé du reçu, fourni par l'API
+     (même lien que celui imprimé sur le PDF serveur). */
+  const qrValeur = recu.lien_verification || recu.lienVerification || '';
   // NIF/RCCM affichés uniquement s'ils sont renseignés dans /parametres.
   const identifiants = [
     String(entreprise.nif ?? '').trim() && `NIF ${String(entreprise.nif).trim()}`,
@@ -55,11 +74,11 @@ export default function RecuDoc({ recu, entreprise }) {
 
       {/* Méta */}
       <div className="flex flex-wrap gap-esp-2 px-esp-6 pt-esp-5 font-courant text-[15px] text-gris-600">
-        <span>Émis le <strong className="font-semibold text-gris-900">{recu.date}</strong></span>
+        <span>Émis le <strong className="font-semibold text-gris-900">{date}</strong></span>
         <span aria-hidden="true">·</span>
-        <span>Facture <strong className="font-mono text-[13px] text-gris-900">{recu.facture}</strong></span>
+        <span>Facture <strong className="font-mono text-[13px] text-gris-900">{numeroFacture}</strong></span>
         <span aria-hidden="true">·</span>
-        <span>Moyen <strong className="font-semibold text-gris-900">{recu.moyen}</strong></span>
+        <span>Moyen <strong className="font-semibold text-gris-900">{moyen}</strong></span>
       </div>
 
       {/* Montant hero + tampon */}
@@ -91,7 +110,7 @@ export default function RecuDoc({ recu, entreprise }) {
           {clientPhone && <p className="font-courant text-[15px] text-gris-700 dg-tnum">{clientPhone}</p>}
           {clientEmail && <p className="font-mono text-[13px] text-gris-600">{clientEmail}</p>}
           <p className="mt-esp-1 font-courant text-[15px] text-gris-700">
-            Facture <strong className="font-mono text-[13px]">{recu.facture}</strong>
+            Facture <strong className="font-mono text-[13px]">{numeroFacture}</strong>
             {facture?.date && <span className="text-gris-600"> du {facture.date}</span>}
           </p>
         </div>
@@ -146,10 +165,15 @@ export default function RecuDoc({ recu, entreprise }) {
       {/* Détails du règlement */}
       <dl className="grid grid-cols-2 gap-esp-3 px-esp-6 pt-esp-4 font-courant text-[15px] sm:grid-cols-4">
         {[
-          ['Date de paiement', recu.date],
-          ['Moyen', recu.moyen],
-          ['Réf. transaction', recu.refTransaction || '—'],
+          ['Date de paiement', date],
+          ['Moyen', moyen],
+          ['Réf. transaction', refTransaction || '—'],
           ['Statut facture', recu.factureStatut || 'Payée'],
+          ...(tech ? [
+            ['Réf. LigdiCash', refLigdiCash || '—'],
+            ['Opérateur', operateur || '—'],
+            ['N° payeur', payeur || '—'],
+          ] : []),
         ].map(([terme, valeur]) => (
           <div key={terme} className="rounded-lg bg-gris-100 p-esp-3">
             <dt className="font-titrage text-[12px] font-bold uppercase tracking-[0.16em] text-gris-600">{terme}</dt>
@@ -166,7 +190,7 @@ export default function RecuDoc({ recu, entreprise }) {
         <div className="min-w-0 max-w-[260px]">
           <p className="font-courant text-[15px] font-semibold text-gris-900">Vérification</p>
           <p className="mt-esp-1 break-all font-mono text-[13px] text-gris-600">{qrValeur}</p>
-          <p className="dg-legende mt-esp-2">{PAIEMENT_EN_LIGNE_ACTIF ? 'Scannez pour vérifier l authenticité du reçu.' : 'Référence interne de vérification (vérification en ligne bientôt disponible).'}</p>
+          <p className="dg-legende mt-esp-2">{qrValeur ? 'Scannez pour vérifier l\u2019authenticité du reçu.' : 'Référence interne de vérification (vérification en ligne bientôt disponible).'}</p>
         </div>
         <div className="ml-auto flex items-end gap-esp-5">
           <Cachet entreprise={entreprise} cachetUrl={entreprise.cachetFinance} signatureUrl={entreprise.signatureFinance} />

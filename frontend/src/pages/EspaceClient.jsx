@@ -17,7 +17,7 @@ import RecuDoc from '../components/finance/RecuDoc.jsx';
 import DevisDoc from '../components/finance/DevisDoc.jsx';
 import { useAuth, useSession } from '../store/auth.js';
 import { api } from '../api/client.js';
-import { dashboardPortal, detailFacture, listerRecus, payerFacture, rejeterDevis, validerDevis as validerDevisApi } from '../api/finance.js';
+import { dashboardPortal, detailFacture, initierPaiementLigdicash, listerRecus, payerFacture, rejeterDevis, validerDevis as validerDevisApi } from '../api/finance.js';
 import { creerTicket as creerTicketApi } from '../api/tickets.js';
 import { listerClients } from '../api/clients.js';
 import useInactivite, { CLE_EXPIRATION, DELAI_MINUTES } from '../hooks/useInactivite.js';
@@ -48,11 +48,6 @@ const LABEL_TICKET = { nouveau: 'Nouveau', qualifie: 'Qualifié', en_attente_ava
 const TYPES_PROJET = { site_web: 'Site web', app_web: 'App web', app_mobile: 'App mobile', autre: 'Autre' };
 const STATUTS_PROJET = { a_faire: 'À faire', en_cours: 'En cours', en_review: 'En review', termine: 'Terminé', en_pause: 'En pause' };
 const JALON_LABEL = { a_venir: 'À venir', en_cours: 'En cours', valide: 'Validé' };
-const MOYENS = [
-  { label: 'Mobile Money', value: 'mobile_money' },
-  { label: 'Virement', value: 'virement' },
-  { label: 'Espèces', value: 'especes' },
-];
 
 const dateFr = (iso) => {
   if (!iso) return '—';
@@ -240,20 +235,30 @@ function ModaleTicket({ projets, onFermer, onCreer }) {
   );
 }
 
-function ModalePaiement({ facture, onFermer, onPayer }) {
-  const [moyen, setMoyen] = useState('mobile_money');
-  const [reference, setReference] = useState('');
+function ModalePaiement({ facture, onFermer }) {
+  /* Espace client : paiement en ligne UNIQUEMENT (Mobile Money via LigdiCash).
+     L'encaissement au guichet (espèces / virement) est enregistré par l'agence
+     depuis l'espace admin — le client n'a pas à le saisir lui-même. */
+  const [enCours, setEnCours] = useState(false);
+  const [erreur, setErreur] = useState('');
 
-  const payer = (e) => {
-    e.preventDefault();
-    if (moyen !== 'especes' && reference.trim().length < 3) return;
-    onPayer({ moyen, ref_transaction: reference.trim() });
+  const payerEnLigne = async () => {
+    setEnCours(true);
+    setErreur('');
+    try {
+      const data = await initierPaiementLigdicash(facture.id);
+      /* LigdiCash bloque l'iframe : redirection dans l'onglet courant. */
+      window.location.assign(data.pay_url);
+    } catch (e) {
+      setErreur(messageErreur(e, 'Paiement en ligne impossible. Réessayez dans un instant.'));
+      setEnCours(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-esp-4" role="dialog" aria-modal="true" aria-label={`Payer ${facture.numero}`}>
       <div className="dg-fondu absolute inset-0 bg-marine-profond/60" onClick={onFermer} />
-      <form onSubmit={payer} className="dg-pop relative w-full max-w-[440px] overflow-hidden rounded-xl bg-gris-0 shadow-ombre-4">
+      <div className="dg-pop relative w-full max-w-[440px] overflow-hidden rounded-xl bg-gris-0 shadow-ombre-4">
         <div className="flex items-center gap-esp-3 bg-marine-profond px-esp-6 py-esp-5">
           <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/10">
             <CreditCard size={22} aria-hidden="true" className="text-digi-signal" />
@@ -266,28 +271,30 @@ function ModalePaiement({ facture, onFermer, onPayer }) {
             <X size={20} aria-hidden="true" />
           </button>
         </div>
+
         <div className="flex flex-col gap-esp-4 p-esp-6">
           <div className="rounded-lg bg-gris-100 p-esp-4 text-center">
             <p className="font-mono text-[13px] text-gris-600">{facture.numero}</p>
             <p className="mt-esp-1 font-titrage text-[30px] font-extrabold text-gris-900 dg-tnum">{fCFA(Number(facture.solde ?? 0))}</p>
           </div>
-          <div>
-            <Label htmlFor="pay-moyen">Moyen de paiement</Label>
-            <select id="pay-moyen" value={moyen} onChange={(e) => setMoyen(e.target.value)} className="mt-esp-2 h-11 min-h-[44px] w-full rounded-md border border-gris-300 bg-gris-0 px-esp-4 font-courant text-[15px]">
-              {MOYENS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </div>
-          {moyen !== 'especes' && (
-            <div>
-              <Label htmlFor="pay-ref">Référence transaction</Label>
-              <div className="mt-esp-2"><Input id="pay-ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ex. TX-2026-0001" /></div>
-            </div>
+
+          {PAIEMENT_EN_LIGNE_ACTIF ? (
+            <>
+              <p className="font-courant text-[15px] text-gris-600">
+                Vous allez être redirigé vers la page sécurisée LigdiCash pour choisir votre opérateur
+                (Orange, MTN, Moov…) et saisir votre numéro.
+              </p>
+              {erreur && <p role="alert" className="font-courant text-[15px] text-erreur">{erreur}</p>}
+              <Button type="button" taille="lg" className="w-full" onClick={payerEnLigne} desactive={enCours} chargement={enCours}>
+                <Banknote size={20} aria-hidden="true" /> Payer {fCFA(Number(facture.solde ?? 0))}
+              </Button>
+              <p className="dg-legende text-center">Le reçu est généré automatiquement après paiement.</p>
+            </>
+          ) : (
+            <p className="font-courant text-[15px] text-gris-600">{MESSAGE_PAIEMENT_BIENTOT}</p>
           )}
-          <Button type="submit" taille="lg" className="w-full" disabled={!PAIEMENT_EN_LIGNE_ACTIF} title={PAIEMENT_EN_LIGNE_ACTIF ? undefined : MESSAGE_PAIEMENT_BIENTOT}><Banknote size={20} aria-hidden="true" /> Payer {fCFA(Number(facture.solde ?? 0))}</Button>
-          {!PAIEMENT_EN_LIGNE_ACTIF && <p role="note" className="rounded-md bg-gris-100 p-esp-3 text-center font-courant text-[14px] text-gris-600">{MESSAGE_PAIEMENT_BIENTOT} Logique conservée, activation via VITE_PAIEMENT_ACTIF=true.</p>}
-          <p className="dg-legende text-center">Le reçu est généré automatiquement après paiement.</p>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -578,6 +585,17 @@ export default function EspaceClient() {
     solde: Number(f.solde ?? 0), statut: LABEL_FACTURE[f.statut] ?? f.statut, statutId: f.statut,
     type_doc: f.type_doc ?? 'facture', typeDoc: f.type_doc ?? 'facture',
     date: dateFr(f.cree_le), lignes: f.lignes ?? [],
+    // Lien de paiement signé (fourni par l'API) : le QR et le lien de la
+    // facture du client doivent être identiques à ceux de l'espace admin.
+    lien_paiement: f.lien_paiement || '',
+    // Bloc « Facturé à » : mêmes champs que l'espace admin.
+    client: f.client_nom ?? '',
+    clientEmail: f.client_email ?? '',
+    clientAdresse: f.client_adresse ?? '',
+    clientPhone: f.client_phone ?? '',
+    // TVA de la facture (pas celle des réglages) : HT/TVA identiques à l'admin.
+    tauxTva: f.tva_active ? 18 : 0,
+    tvaActive: !!f.tva_active,
   }));
   const impayees = factures.filter((f) => f.statutId !== 'payee');
   const reste = impayees.reduce((s, f) => s + f.solde, 0);
@@ -656,7 +674,18 @@ export default function EspaceClient() {
       setDocVu({
         type: 'recu', numero: r.numero,
         lignes: (facture.lignes ?? []).map((l) => ({ description: l.description, quantite: Number(l.quantite), montant: Number(l.montant) })),
-        facture: facture.numero, montant: String(r.montant),
+        facture: r.facture_numero ?? facture.numero,
+        factureDate: dateFr(facture.cree_le),
+        montant: String(r.montant),
+        date: dateFr(r.cree_le),
+        moyen: r.moyen,
+        client: r.client_nom ?? facture.client_nom ?? '',
+        clientEmail: r.client_email ?? facture.client_email ?? '',
+        clientAdresse: r.client_adresse ?? facture.client_adresse ?? '',
+        clientPhone: r.client_phone ?? facture.client_phone ?? '',
+        // Référence de la transaction de paiement (PAI-… en mobile money).
+        refTransaction: r.ref_transaction ?? '',
+        lien_verification: r.lien_verification,
       });
     } catch (e) {
       notifier({ type: 'info', titre: 'Affichage impossible', texte: messageErreur(e) });
@@ -675,6 +704,14 @@ export default function EspaceClient() {
     const doc = {
       numero: docFacture.numero, date: docFacture.date, statut: docFacture.statut,
       typeDoc: docFacture.type_doc ?? docFacture.typeDoc ?? 'facture',
+      lienPaiement: docFacture.lien_paiement,
+      solde: docFacture.solde,
+      client: docFacture.client,
+      clientEmail: docFacture.clientEmail,
+      clientAdresse: docFacture.clientAdresse,
+      clientPhone: docFacture.clientPhone,
+      tauxTva: docFacture.tauxTva,
+      tvaActive: docFacture.tvaActive,
       lignes: (docFacture.lignes ?? []).map((l) => ({ description: l.description, quantite: Number(l.quantite), montant: Number(l.montant) })),
     };
     return (

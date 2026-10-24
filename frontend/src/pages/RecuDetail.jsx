@@ -49,6 +49,11 @@ export default function RecuDetail() {
             clientPhone: trouve.client_phone ?? facture.client_phone ?? '',
             date: dateFr(trouve.cree_le),
             moyen: MOYEN_LABEL[trouve.moyen] ?? trouve.moyen,
+            // Référence de la transaction de paiement (PAI-… en mobile money).
+            refTransaction: trouve.ref_transaction ?? '',
+            ref_ligdicash: trouve.ref_ligdicash ?? '',
+            paiement_operateur: trouve.paiement_operateur ?? '',
+            paiement_client: trouve.paiement_client ?? '',
             lignes: (facture.lignes ?? []).map((l) => ({
               description: l.description, quantite: Number(l.quantite), montant: Number(l.montant),
             })),
@@ -106,7 +111,7 @@ export default function RecuDetail() {
       </div>
 
       <div className="mt-esp-6">
-        <RecuDoc recu={recu} entreprise={entreprise} />
+        <RecuDoc recu={recu} entreprise={entreprise} tech />
       </div>
     </div>
   );

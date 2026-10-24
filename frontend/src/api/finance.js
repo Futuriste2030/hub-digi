@@ -48,3 +48,20 @@ export const retirerCachet = (ficheId) => api.delete(`/finance/paie/${ficheId}/c
 export const detailClient = (id) => get(`/clients/${id}/`);
 export const overviewClient = (id) => get(`/clients/${id}/overview/`);
 export const dashboardPortal = () => get('/portal/dashboard/');
+
+/* --- Paiement en ligne LigdiCash (payin avec redirection) ---
+   Le backend garde les clés : le frontend ne parle jamais à LigdiCash.
+   Les liens publics (page de paiement, page de retour, vérification d'un reçu)
+   sont signés — la signature est le seul droit d'accès. */
+export const initierPaiementLigdicash = (factureId) =>
+  post('/finance/paiements/ligdicash/initier/', { facture_id: factureId });
+export const initierPaiementLien = (numero, sig) =>
+  post('/finance/paiements/ligdicash/initier-lien/', { facture: numero, sig });
+export const statutPaiementLigdicash = (transactionId) =>
+  get(`/finance/paiements/ligdicash/${transactionId}/statut/`);
+export const statutPaiementPublic = (transactionId, sig) =>
+  get(`/finance/paiements/ligdicash/retour/${transactionId}/`, { sig });
+export const facturePaiementPublique = (numero, sig) =>
+  get(`/finance/paiements/ligdicash/facture/${numero}/`, { sig });
+export const recuPublique = (numero, sig) =>
+  get(`/finance/paiements/ligdicash/recu/${numero}/`, { sig });

@@ -214,7 +214,7 @@ Statuts: `en_attente -> valide | refuse` (+ `annule` par le demandeur tant que n
 - [x] Moyens: espèces, virement, Mobile Money (champ ref transaction)
 - [x] Rapports CA (brut/encaissé/dépenses), séries mensuelles
 - [ ] Relances auto impayés, export CSV
-- [ ] Paiement en ligne (liens `pay.digicom.ml` en attente de l'API de paiement — logique conservée, non branchée)
+- [x] Paiement en ligne (LigdiCash, payin avec redirection, 19/10/2026, app `ligdicash`) : **lien unique et signé par facture** (`/paiement/facture/<numero>?sig=…`, HMAC sur le SECRET_KEY), figé dans le QR de la facture PDF, propagé au **reçu** (lien de vérification `/paiement/recu/<numero>`) ; montant figé côté serveur à l'initiation et contrôlé à la confirmation ; callback LigdiCash re-vérifié via `/confirm` (le payload n'est jamais cru) + déduplication des 2 POST ; page de retour publique `/paiement/retour` qui n'invente jamais le statut
 - [x] Fournisseurs/Achats (30/09/2026, app `fournisseurs`) : fiches `Fournisseur` + bons de commande `BDC-SLUG-AAAA-NNNN` (brouillon→validée→envoyée, lignes) + bons de livraison `BDL-SLUG-AAAA-NNNN` (2 choix : depuis commande avec reprise auto des restes, ou saisie libre ; validation = imputation quantités → partiellement_livrée/livrée) + conversion commande→facture `ACHAT-SLUG-AAAA-NNNN` (reçue→validée→payée/partielle, lien BDC tracé) + paiements avec reçu `RECU-F-SLUG-AAAA-NNNN` ; paiement = sélecteur **Non payée / Acompte / Payée** (c'est Digi Com qui paie, pas de lien de paiement, montant contrôlé ≤ solde, déduit du solde dû) ; références serveur séquentielles (`references.py` + `CompteurReference`, atomique, par année) ; fiche 360° `/finance/fournisseurs/:id` (onglets Commandes/Livraisons/Factures & Reçus, PDF : BDC/BDL/facture/reçu) ; guard `ROLES_FINANCE`, suppression chef_finance/super_admin bloquée si liens
 
 ---
@@ -405,7 +405,7 @@ GET/POST /api/v1/auth/login/ refresh/ me/ + otp/ (setup/confirm/verify/disable/s
 - [x] RH + Juridique + Com calendrier/campagnes + Bug tracker.js V1 + KPI + notifs
 - [ ] Relances/SLA/échéances auto (Celery Beat non actif), évaluations + trombinoscope, export CSV, recherche globale, AuditLog auto
 
-**Après mise en ligne :** API de paiement (liens `pay.digicom.ml`), SMTP dynamique par identité + fernet, SPF/DKIM/DMARC, durcissement origine tracker, mention consentement trackers clients.
+**Après mise en ligne :** SMTP dynamique par identité + fernet, SPF/DKIM/DMARC, durcissement origine tracker, mention consentement trackers clients. *(API de paiement : faite — LigdiCash, 19/10/2026.)*
 
 ---
 

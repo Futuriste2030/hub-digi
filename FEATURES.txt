@@ -288,9 +288,36 @@ d) Pointage QR dynamique (/pointage + /rh/pointage + /rh/rapports) :
   lignes, /paie + /fiche-paie).
 - Rapports CA (brut/encaisse/depenses), series mensuelles (/rapports).
 - Envoi mail facture / relance via identite finance@digicom.ml.
-- Non fait : relances auto impayes, export CSV, paiement en ligne
-  (liens pay.digicom.ml en attente API paiement - logique conservee, non
-  branchee).
+- Paiement en ligne (MAJ 19/10/2026) : branche sur LigdiCash (payin avec
+  redirection). App ligdicash. Voir bloc dedie plus bas.
+
+Module Paiement en ligne (LigdiCash) - MAJ 19/10/2026 :
+payin avec redirection, remplace l'hypothese d'un site externe pay.digicom.ml.
+- App backend ligdicash : PayinTransaction (transaction_id maison
+  PAI-AAAAMMJJ-XXXXXX, montant fige, statut pending/completed/notcompleted,
+  token de creation, pay_url, operateur, request_id, reponse brute).
+- Client HTTP stdlib (urllib) : aucune dependance ajoutee a requirements.txt.
+- Endpoints : POST /finance/paiements/ligdicash/initier/ (authentifie),
+  POST .../initier-lien/ (public, lien signe), GET .../facture/<numero>/ (public,
+  signe), GET .../recu/<numero>/ (public, signe), GET .../retour/<txn>/ (public,
+  signe), GET .../<txn>/statut/ (authentifie), POST .../callback/ (public).
+- Regles : customer toujours vide (sinon LigdiCash masque les operateurs), otp
+  vide, transaction_id injecte dans custom_data (le token API n'est pas stable
+  entre creation et callback), callback RE-VERIFIE via /confirm avec le token de
+  creation (le payload n'est jamais cru), deduplication du double POST
+  LigdiCash, montant encaisse compare au montant fige (ecart => rien n'est
+  encaisse, anomalie tracee), recu auto + mail recu_disponible.
+- Liens uniques signes (HMAC sur SECRET_KEY) : /paiement/facture/<numero> (lien
+  de PAIEMENT, fige dans le QR de la facture PDF + mail facture_disponible /
+  relance + WhatsApp + bouton "copier") et /paiement/recu/<numero> (lien de
+  VERIFICATION, fige dans le QR du recu PDF et du recu imprimable). Lien stable
+  dans le temps, montant TOUJOURS recalcule par le serveur.
+- Interrupteurs : PAYMENT_ENABLED (master) + LIGDICASH_ENABLED (fournisseur)
+  + cles LIGDICASH_* dans backend/.env (jamais dans le front ni dans git).
+- Test reel : python manage.py ligdicash_test (facture 100 XOF, jamais payee).
+- Frontend : pages publiques /paiement/facture/:numero, /paiement/recu/:numero,
+  /paiement/retour, /paiement/annule ; modale de paiement de l'espace client a
+  deux parcours (Mobile Money en ligne / encaissement au guichet conserve).
 
 Module Fournisseurs / Achats (/finance/fournisseurs) - MAJ 30/09/2026 :
 miroir Clients, perimetre Finance. C'est Digi Com qui paie, pas de lien

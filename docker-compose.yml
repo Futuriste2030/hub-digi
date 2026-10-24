@@ -11,7 +11,7 @@ services:
       context: .
       args:
         VITE_API_URL: https://hub.digicom.ml/api/v1
-        VITE_PAIEMENT_ACTIF: "false"
+        VITE_PAIEMENT_ACTIF: "true"
     env_file:
       - backend/.env
     environment:

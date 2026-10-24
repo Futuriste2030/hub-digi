@@ -135,6 +135,91 @@
   code, pre {
     font-family: 'JetBrains Mono', monospace;
   }
+  /* Listes déroulantes — signature DIGI COM : chevron bleu dans une
+     pastille chanfreinée et panneau d'options sur mesure (Chromium).
+     Repli sur le menu système ailleurs. S'applique aux 80+ selects. */
+  select:not([multiple]) {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M1 .5h18.5l6 6v19H1Z' fill='%23e7f1f9' stroke='%23d6dce3'/%3E%3Cpath d='M9 11l4 4 4-4' fill='none' stroke='%232f7cbe' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 26px 26px;
+    padding-right: 44px !important;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  select:not([multiple]):hover:not(:disabled) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cpath d='M1 .5h18.5l6 6v19H1Z' fill='%23dbeaf6' stroke='%23a9cfeb'/%3E%3Cpath d='M9 11l4 4 4-4' fill='none' stroke='%231e5a8e' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'/%3E%3C/svg%3E");
+  }
+  select:not([multiple]):disabled {
+    cursor: not-allowed;
+  }
+  /* Options : repli pour les navigateurs sans select personnalisable. */
+  select option {
+    background-color: var(--gris-000);
+    color: var(--gris-700);
+    font-family: Barlow, 'Source Sans 3', 'IBM Plex Sans', sans-serif;
+    font-size: 15px;
+    padding: 8px 12px;
+  }
+  select option:disabled {
+    background-color: var(--gris-100);
+    color: var(--gris-400);
+  }
+  /* Select personnalisable (Chromium 135+) : le panneau d'options reprend
+     l'identité DIGI COM au lieu du menu système. */
+  @supports (appearance: base-select) {
+    select:not([multiple]) {
+      appearance: base-select;
+    }
+    select:not([multiple])::picker-icon {
+      display: none;
+    }
+    select:not([multiple])::picker(select) {
+      appearance: base-select;
+      margin-top: 6px;
+      padding: 6px;
+      border: 1px solid var(--gris-300);
+      border-top: 3px solid var(--bleu-digi);
+      border-radius: var(--rayon-lg);
+      outline: none;
+      background: var(--gris-000);
+      box-shadow: var(--ombre-3);
+      max-height: min(320px, 50vh);
+      overflow-y: auto;
+      font-family: Barlow, 'Source Sans 3', 'IBM Plex Sans', sans-serif;
+    }
+    select:not([multiple]) option {
+      justify-content: flex-start;
+      border-radius: var(--rayon-md);
+      font-family: Barlow, 'Source Sans 3', 'IBM Plex Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--gris-700);
+      background: var(--gris-000);
+      padding: 9px 12px;
+      cursor: pointer;
+    }
+    select:not([multiple]) option:hover,
+    select:not([multiple]) option:focus,
+    select:not([multiple]) option:focus-visible {
+      background: var(--info-fond);
+      color: var(--bleu-texte);
+      outline: none;
+    }
+    select:not([multiple]) option:checked {
+      background: var(--info-fond);
+      color: var(--bleu-texte);
+      font-weight: 700;
+      box-shadow: inset 3px 0 0 var(--bleu-digi);
+    }
+    select:not([multiple]) option::checkmark {
+      order: 1;
+      margin-left: auto;
+      color: var(--bleu-digi);
+    }
+  }
   /* Scrollbars fines globales : discrètes, teintées gris-300/400.
      La sidebar garde sa variante marine (.dg-scroll-fin). */
   * {
@@ -220,6 +305,19 @@
   }
   /* Chiffres tabulaires pour montants et refs */
   .dg-tnum { font-variant-numeric: tabular-nums; }
+  /* Tables de données : langage unique (en-tête gris-100, filets, survol).
+     Les documents imprimables (.dg-print-doc) reprennent leur mise en page. */
+  main table thead tr { background: var(--gris-100); }
+  main table thead th {
+    padding-top: var(--esp-2);
+    border-top: 1px solid var(--gris-200);
+    border-bottom: 1px solid var(--gris-200);
+  }
+  main table tbody tr { transition: background-color var(--duree-rapide) var(--ease-standard); }
+  main table tbody tr:hover { background: var(--gris-100); }
+  .dg-print-doc table thead tr { background: transparent; }
+  .dg-print-doc table thead th { padding-top: 0; border-top: 0; border-bottom: 0; }
+  .dg-print-doc table tbody tr:hover { background: transparent; }
   /* Micro-animations dashboard (toutes ≤ 500ms, sans rebond) */
   .dg-fondu { animation: dg-fondu 280ms ease both; }
   .dg-fondu-tard { opacity: 0; animation: dg-fondu 280ms ease 200ms forwards; }

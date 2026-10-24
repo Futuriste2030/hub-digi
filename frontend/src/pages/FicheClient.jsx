@@ -42,7 +42,7 @@ import { payerFacture, telechargerPdf } from '../api/finance.js';
 import { envoyerInvitationClient, majClient, supprimerClient, archiverClient, desarchiverClient } from '../api/clients.js';
 import { listerUsers, supprimerContrat } from '../api/ressources.js';
 import { messageErreur } from '../api/client.js';
-import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, lienPaiementFacture } from '../lib/paiement.js';
+import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, copierLienPaiement } from '../lib/paiement.js';
 import { NonTrouve } from './Pages.jsx';
 
 /* Fiche Client 360° — API réelle (SPEC §4 : GET /clients/:id/overview/). */
@@ -323,8 +323,6 @@ function OngletCom({ client }) {
   );
 }
 
-const lienPaiement = (numero) => lienPaiementFacture(numero);
-
 function OngletFinance({ client, notifier, onFait }) {
   const total = client.factures.reduce((s, f) => s + f.total, 0);
   const encaisse = client.factures.filter((f) => f.statut === 'payee').reduce((s, f) => s + f.total, 0);
@@ -342,12 +340,16 @@ function OngletFinance({ client, notifier, onFait }) {
       notifier({ type: 'info', titre: 'Paiement en ligne bientôt disponible', texte: MESSAGE_PAIEMENT_BIENTOT });
       return;
     }
-    try {
-      await navigator.clipboard.writeText(lienPaiement(f.numero));
-    } catch {
-      /* presse-papiers indisponible */
+    if (!f.lien_paiement) {
+      notifier({ type: 'info', titre: 'Lien indisponible', texte: `${f.numero} — rechargez la fiche pour obtenir son lien de paiement.` });
+      return;
     }
-    notifier({ type: 'info', titre: 'Lien copié', texte: `Lien de paiement ${f.numero} copié. Partagez-le au client.` });
+    const ok = await copierLienPaiement(f.lien_paiement);
+    notifier({
+      type: 'info',
+      titre: ok ? 'Lien copié' : 'Copie impossible',
+      texte: ok ? `Lien de paiement ${f.numero} copié. Partagez-le au client.` : 'Presse-papiers indisponible sur ce poste.',
+    });
   };
 
   const payer = async (f) => {

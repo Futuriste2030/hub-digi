@@ -1,4 +1,6 @@
 .env
+.env.prod.bak
+.env.prod.prepared
 db.sqlite3
 __pycache__/
 *.py[cod]
