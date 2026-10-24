@@ -282,6 +282,11 @@ class InvoiceViewSet(FinanceScopeMixin, viewsets.ModelViewSet):
         invoice.save()
         return Response(InvoiceSerializer(invoice).data)
 
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role not in ("super_admin", "chef_finance"):
+            return Response({"detail": "Suppression réservée au Chef Finance."}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=["post"])
     def relancer(self, request, pk=None):
         """Relance manuelle : envoyée/partielle non soldée -> impayée + mail

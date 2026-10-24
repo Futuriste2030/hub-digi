@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useOutletContext, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, Link2, Banknote, Send, BadgeCheck, Bell } from 'lucide-react';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { ArrowLeft, Printer, Link2, Banknote, Send, BadgeCheck, Bell, Trash2 } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import FactureDoc from '../components/finance/FactureDoc.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_FINANCE, ROLES_CHEF_FINANCE, peutVoir } from '../lib/acces.js';
-import { envoyerFacture, listerFactures, majFacture, payerFacture, relancerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
+import { envoyerFacture, listerFactures, majFacture, payerFacture, relancerFacture, supprimerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
 import { messageErreur } from '../api/client.js';
 import { getEntreprise } from '../data/parametres.js';
 import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, copierLienPaiement } from '../lib/paiement.js';
@@ -23,6 +23,7 @@ const dateFr = (iso) => {
 
 export default function FactureDetail() {
   const { numero } = useParams();
+  const navigate = useNavigate();
   const { notifier, session } = useOutletContext();
   const entreprise = getEntreprise();
   const [facture, setFacture] = useState(null);
@@ -58,6 +59,17 @@ export default function FactureDetail() {
       titre: ok ? 'Lien copié' : 'Copie impossible',
       texte: ok ? `Lien de paiement ${facture.numero} copié.` : 'Presse-papiers indisponible sur ce poste.',
     });
+  };
+
+  const supprimer = async () => {
+    if (!window.confirm(`Supprimer la facture ${facture.numero} ? Ses reçus seront aussi supprimés.`)) return;
+    try {
+      await supprimerFacture(facture.id);
+      notifier({ type: 'succes', titre: 'Facture supprimée', texte: `${facture.numero} supprimée.` });
+      navigate('/factures');
+    } catch (e) {
+      notifier({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(e) });
+    }
   };
 
   const payer = async () => {
@@ -182,6 +194,11 @@ export default function FactureDetail() {
           {facture.statut !== 'payee' && Number(facture.solde ?? 0) > 0 && (
             <Button variante="fantome" onClick={copier} title={PAIEMENT_EN_LIGNE_ACTIF ? undefined : MESSAGE_PAIEMENT_BIENTOT}>
               <Link2 size={20} aria-hidden="true" /> {PAIEMENT_EN_LIGNE_ACTIF ? 'Lien de paiement' : 'Lien de paiement (bientôt)'}
+            </Button>
+          )}
+          {peutValider && (
+            <Button variante="secondaire" onClick={supprimer}>
+              <Trash2 size={20} aria-hidden="true" /> Supprimer
             </Button>
           )}
           {peutValider && (

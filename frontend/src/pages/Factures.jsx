@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { Search, ArrowRight, Link2, Banknote, Printer, Plus, X, Mail, BadgeCheck, Bell } from 'lucide-react';
+import { Search, ArrowRight, Link2, Banknote, Printer, Plus, X, Mail, BadgeCheck, Bell, Trash2 } from 'lucide-react';
 import Button from '../components/ui/Button.jsx';
 import { Card, CardBody } from '../components/ui/Card.jsx';
 import Badge from '../components/ui/Badge.jsx';
@@ -8,7 +8,7 @@ import { Label, Input } from '../components/ui/Input.jsx';
 import EditeurLignes from '../components/finance/EditeurLignes.jsx';
 import AccesRestreint from '../components/guards/AccesRestreint.jsx';
 import { ROLES_FINANCE, ROLES_CHEF_FINANCE, peutVoir } from '../lib/acces.js';
-import { creerFacture, envoyerFacture, listerFactures, payerFacture, relancerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
+import { creerFacture, envoyerFacture, listerFactures, payerFacture, relancerFacture, supprimerFacture, telechargerPdf, validerFacture } from '../api/finance.js';
 import { listerClients } from '../api/clients.js';
 import { messageErreur } from '../api/client.js';
 import { PAIEMENT_EN_LIGNE_ACTIF, MESSAGE_PAIEMENT_BIENTOT, copierLienPaiement } from '../lib/paiement.js';
@@ -220,6 +220,17 @@ export default function Factures() {
     }
   };
 
+  const supprimer = async (f) => {
+    if (!window.confirm(`Supprimer la facture ${f.numero} ? Ses reçus seront aussi supprimés.`)) return;
+    try {
+      await supprimerFacture(f.id);
+      notifier?.({ type: 'succes', titre: 'Facture supprimée', texte: `${f.numero} supprimée.` });
+      charger(recherche.trim());
+    } catch (e) {
+      notifier?.({ type: 'info', titre: 'Suppression impossible', texte: messageErreur(e) });
+    }
+  };
+
   const copier = async (f) => {
     if (!PAIEMENT_EN_LIGNE_ACTIF) {
       notifier({ type: 'info', titre: 'Paiement en ligne bientôt disponible', texte: MESSAGE_PAIEMENT_BIENTOT });
@@ -363,6 +374,11 @@ export default function Factures() {
                       {peutValider && f.statut === 'brouillon' && (
                         <button type="button" onClick={() => valider(f)} aria-label={`Valider ${f.numero}`} title="Valider (brouillon → validée, interne)" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-succes hover:bg-succes-fond">
                           <BadgeCheck size={20} aria-hidden="true" />
+                        </button>
+                      )}
+                      {peutValider && (
+                        <button type="button" onClick={() => supprimer(f)} aria-label={`Supprimer ${f.numero}`} title="Supprimer la facture (et ses reçus)" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-erreur hover:bg-erreur-fond">
+                          <Trash2 size={20} aria-hidden="true" />
                         </button>
                       )}
                       {f.statut === 'validee' && (
