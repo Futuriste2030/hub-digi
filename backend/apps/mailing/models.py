@@ -58,6 +58,11 @@ class SentMail(models.Model):
     cc = models.TextField(blank=True, help_text="Copie : e-mails pro séparés par des virgules.")
     subject = models.CharField(max_length=255)
     body_html = models.TextField(blank=True)
+    # Pièce jointe optionnelle (ex. reçu PDF) — stockée en base pour être
+    # expédiée par la tâche Celery (qui ne dispose que de l'id du SentMail).
+    piece_jointe_nom = models.CharField(max_length=255, blank=True)
+    piece_jointe_type = models.CharField(max_length=100, blank=True, default="application/pdf")
+    piece_jointe = models.BinaryField(blank=True, null=True)
     client = models.ForeignKey("clients.Client", null=True, blank=True, on_delete=models.SET_NULL)
     ticket = models.ForeignKey("secretariat_tickets.Ticket", null=True, blank=True, on_delete=models.SET_NULL)
     project = models.ForeignKey("projects_dev.Project", null=True, blank=True, on_delete=models.SET_NULL)
@@ -127,6 +132,12 @@ class SentMail(models.Model):
                 reply_to=[adresse] if adresse else None, headers=entetes,
                 connection=connexion)
             message.attach_alternative(self.body_html, "text/html")
+            if self.piece_jointe and self.piece_jointe_nom:
+                try:
+                    message.attach(self.piece_jointe_nom, bytes(self.piece_jointe),
+                                   self.piece_jointe_type or "application/octet-stream")
+                except Exception:
+                    pass
             message.send(fail_silently=False)
             self.statut = self.STATUT_ENVOYE
         except Exception as exc:
