@@ -350,9 +350,11 @@ export default function Factures() {
                       <Link to={`/factures/${f.numero}`} aria-label={`Voir ${f.numero}`} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-digi-texte hover:bg-digi-voile">
                         <ArrowRight size={20} aria-hidden="true" />
                       </Link>
-                      <button type="button" onClick={() => copier(f)} aria-label={`Copier le lien ${f.numero}`} title={PAIEMENT_EN_LIGNE_ACTIF ? 'Copier le lien de paiement' : MESSAGE_PAIEMENT_BIENTOT} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-digi-texte hover:bg-digi-voile">
-                        <Link2 size={20} aria-hidden="true" />
-                      </button>
+                      {f.statut !== 'payee' && Number(f.solde ?? f.total ?? 0) > 0 && (
+                        <button type="button" onClick={() => copier(f)} aria-label={`Copier le lien ${f.numero}`} title={PAIEMENT_EN_LIGNE_ACTIF ? 'Copier le lien de paiement' : MESSAGE_PAIEMENT_BIENTOT} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-digi-texte hover:bg-digi-voile">
+                          <Link2 size={20} aria-hidden="true" />
+                        </button>
+                      )}
                       {peutValider && f.statut !== 'payee' && (
                         <button type="button" onClick={() => setPaiement(f)} aria-label={`Encaisser ${f.numero}`} title="Encaisser" className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-succes hover:bg-succes-fond">
                           <Banknote size={20} aria-hidden="true" />

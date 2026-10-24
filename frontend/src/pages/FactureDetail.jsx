@@ -179,9 +179,11 @@ export default function FactureDetail() {
           <Button variante="secondaire" onClick={pdfServeur}>
             <Printer size={20} aria-hidden="true" /> PDF serveur
           </Button>
-          <Button variante="fantome" onClick={copier} title={PAIEMENT_EN_LIGNE_ACTIF ? undefined : MESSAGE_PAIEMENT_BIENTOT}>
-            <Link2 size={20} aria-hidden="true" /> {PAIEMENT_EN_LIGNE_ACTIF ? 'Lien de paiement' : 'Lien de paiement (bientôt)'}
-          </Button>
+          {facture.statut !== 'payee' && Number(facture.solde ?? 0) > 0 && (
+            <Button variante="fantome" onClick={copier} title={PAIEMENT_EN_LIGNE_ACTIF ? undefined : MESSAGE_PAIEMENT_BIENTOT}>
+              <Link2 size={20} aria-hidden="true" /> {PAIEMENT_EN_LIGNE_ACTIF ? 'Lien de paiement' : 'Lien de paiement (bientôt)'}
+            </Button>
+          )}
           {peutValider && (
             <Button variante={facture.tva_active ? 'primaire' : 'secondaire'} onClick={basculerTva} title="Activer ou couper la TVA 18 %">
               TVA {facture.tva_active ? '18 % ON' : 'OFF'}
